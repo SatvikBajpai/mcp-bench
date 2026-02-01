@@ -90,28 +90,56 @@ def wait_for_response(page, timeout_ms=180_000):
     """
     Wait until Claude finishes generating.
 
-    1. Wait for streaming indicator or response to appear.
+    1. Wait for any response content to appear.
     2. Wait for streaming to stop.
     3. Extra settle time for rendering.
     """
-    # Wait for response to start - look for any assistant message
-    try:
-        page.wait_for_selector(
-            '[data-testid="chat-message-content"]',
-            state="attached",
-            timeout=60_000,
-        )
-    except PwTimeout:
-        print("    [warn] No response detected within 60s")
-        return False
+    # Multiple selectors to detect response start
+    response_selectors = [
+        '[data-testid="chat-message-content"]',
+        'div.font-claude-message',
+        'div[data-is-streaming]',
+        '[data-testid="assistant-message"]',
+        'div.prose',  # Common markdown container
+    ]
+
+    # Wait for response to start - try multiple selectors
+    response_found = False
+    for selector in response_selectors:
+        try:
+            page.wait_for_selector(selector, state="attached", timeout=10_000)
+            response_found = True
+            print(f"    [debug] Response detected via: {selector}")
+            break
+        except PwTimeout:
+            continue
+
+    if not response_found:
+        # Last resort: wait a bit and check if page content changed
+        print("    [warn] No response selector matched, waiting 30s...")
+        time.sleep(30)
 
     # Poll for streaming to finish (can't use wait_for_function due to CSP)
-    # Look for the stop button to disappear or absence of streaming indicators
+    # Look for stop button to disappear
     start_time = time.time()
     while time.time() - start_time < timeout_ms / 1000:
-        # Check if still streaming by looking for stop button or streaming indicators
-        stop_btn = page.locator('button[aria-label="Stop Response"], button:has-text("Stop")').first
-        if stop_btn.count() == 0 or not stop_btn.is_visible():
+        # Multiple stop button selectors
+        stop_selectors = [
+            'button[aria-label="Stop Response"]',
+            'button[aria-label="Stop generating"]',
+            'button:has-text("Stop")',
+        ]
+        stop_visible = False
+        for sel in stop_selectors:
+            try:
+                btn = page.locator(sel).first
+                if btn.count() > 0 and btn.is_visible():
+                    stop_visible = True
+                    break
+            except:
+                continue
+
+        if not stop_visible:
             # No stop button visible = done streaming
             break
         time.sleep(2)
@@ -120,7 +148,7 @@ def wait_for_response(page, timeout_ms=180_000):
         return False
 
     # Let final content settle
-    time.sleep(5)
+    time.sleep(10)
     return True
 
 
