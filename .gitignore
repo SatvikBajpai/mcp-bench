@@ -1,0 +1,24 @@
+# Browser auth data (contains login sessions)
+browser_data/
+browser_data_claude/
+
+# Test outputs
+screenshots/
+screenshots_claude/
+responses/
+responses_claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
