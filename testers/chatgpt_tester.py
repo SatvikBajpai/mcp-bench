@@ -3,22 +3,20 @@
 ChatGPT MCP Tester - Playwright automation script.
 
 Reads queries from a CSV, sends each to ChatGPT with MCP connector attached,
-waits for the response, and captures the response text.
+waits for the response, captures the response text and server telemetry.
 
 Usage:
     # Step 1: Save auth (one-time) - log into ChatGPT, connect MCP
-    python tester.py --save-auth
+    python chatgpt_tester.py --save-auth
 
     # Step 2: Run tests
-    python tester.py --dataset plfs --csv queries/plfs.csv
-    python tester.py --dataset cpi --csv queries/cpi.csv
-    python tester.py --dataset asi --csv queries/asi.csv
+    python chatgpt_tester.py --dataset PLFS --csv queries/chatgpt/test_queries_PLFS.csv --server-log /tmp/mospi_telemetry.log
 
     # Resume from a specific query number
-    python tester.py --dataset plfs --csv queries/plfs.csv --start 5
+    python chatgpt_tester.py --dataset PLFS --csv queries/chatgpt/test_queries_PLFS.csv --server-log /tmp/mospi_telemetry.log --start 5
 
     # Also take screenshots
-    python tester.py --dataset plfs --csv queries/plfs.csv --screenshots
+    python chatgpt_tester.py --dataset PLFS --csv queries/chatgpt/test_queries_PLFS.csv --server-log /tmp/mospi_telemetry.log --screenshots
 """
 
 import argparse
@@ -49,6 +47,17 @@ SELECTORS = {
 
 # MCP connector name to look for in the attach menu
 MCP_CONNECTOR_NAME = "mospi_V1"
+
+
+def read_server_log(log_path: str) -> str:
+    """Read current contents of server telemetry log."""
+    if not log_path:
+        return ""
+    try:
+        with open(log_path, "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        return ""
 
 
 def save_auth():
@@ -99,7 +108,7 @@ def wait_for_response(page, timeout_ms=180_000):
         )
     except PwTimeout:
         if not page.query_selector(SELECTORS["assistant_msg"]):
-            print("    [warn] No response detected within 30s")
+            print("    [warn] No response detected within 120s")
             return False
 
     # Wait for stop button to disappear
@@ -176,8 +185,17 @@ def start_new_chat(page):
     time.sleep(2)
 
 
-def run_queries(csv_path, dataset_tag, start_from=1, headless=False, take_screenshots=False, mcp_name=MCP_CONNECTOR_NAME):
-    """Read CSV, send each query, capture response text and optionally screenshot."""
+def run_queries(
+    csv_path,
+    dataset_tag,
+    server_log="",
+    start_from=1,
+    headless=False,
+    take_screenshots=False,
+    mcp_name=MCP_CONNECTOR_NAME,
+    query_delay=60,
+):
+    """Read CSV, send each query, capture response text, server log, and optionally screenshot."""
     RESPONSES_DIR.mkdir(exist_ok=True)
     if take_screenshots:
         SCREENSHOTS_DIR.mkdir(exist_ok=True)
@@ -199,6 +217,8 @@ def run_queries(csv_path, dataset_tag, start_from=1, headless=False, take_screen
     print(f"Loaded {len(queries)} queries from {csv_path}")
     print(f"Starting from query #{start_from}")
     print(f"Responses -> {RESPONSES_DIR}/")
+    if server_log:
+        print(f"Server log -> {server_log}")
     if take_screenshots:
         print(f"Screenshots -> {SCREENSHOTS_DIR}/")
     print()
@@ -219,14 +239,17 @@ def run_queries(csv_path, dataset_tag, start_from=1, headless=False, take_screen
         page = context.pages[0] if context.pages else context.new_page()
         page.set_default_timeout(60_000)
 
-        for row in queries:
-            qno = int(row["no"])
+        for qno, row in enumerate(queries, 1):
+            query_no = int(row.get("no", qno))
             query = row["query"]
 
-            if qno < start_from:
+            if query_no < start_from:
                 continue
 
-            print(f"[{qno}/{len(queries)}] {query[:80]}...")
+            print(f"[{query_no}/{len(queries)}] {query[:80]}...")
+
+            # Snapshot server log before query
+            log_before = read_server_log(server_log)
 
             start_new_chat(page)
 
@@ -239,10 +262,13 @@ def run_queries(csv_path, dataset_tag, start_from=1, headless=False, take_screen
             except Exception as e:
                 print(f"    [ERROR] Failed to send: {e}")
                 results.append({
-                    "no": qno,
+                    "no": query_no,
                     "query": query,
+                    "indicator_tested": row.get("indicator_tested", ""),
+                    "filters_tested": row.get("filters_tested", ""),
                     "status": "SEND_ERROR",
                     "response_text": "",
+                    "server_log": "",
                     "error": str(e),
                 })
                 continue
@@ -257,22 +283,33 @@ def run_queries(csv_path, dataset_tag, start_from=1, headless=False, take_screen
             response_text = get_response_text(page)
             print(f"    Response: {response_text[:120]}...")
 
+            # Snapshot server log after
+            log_after = read_server_log(server_log)
+            new_log = ""
+            if log_after and log_before:
+                new_log = log_after[len(log_before):] if log_after.startswith(log_before) else log_after
+            elif log_after:
+                new_log = log_after
+
             # Optional screenshot
             ss_name = ""
             if take_screenshots:
                 page.evaluate("window.scrollTo(0, 0)")
                 time.sleep(1)
-                ss_name = f"{tag}_{qno:02d}.png"
+                ss_name = f"{tag}_{query_no:02d}.png"
                 ss_path = SCREENSHOTS_DIR / ss_name
                 page.screenshot(path=str(ss_path), full_page=True)
                 print(f"    Screenshot: {ss_path}")
 
             status = "PASS" if success else "TIMEOUT"
             results.append({
-                "no": qno,
+                "no": query_no,
                 "query": query,
+                "indicator_tested": row.get("indicator_tested", ""),
+                "filters_tested": row.get("filters_tested", ""),
                 "status": status,
                 "response_text": response_text,
+                "server_log": new_log,
                 "screenshot": ss_name,
             })
 
@@ -285,6 +322,11 @@ def run_queries(csv_path, dataset_tag, start_from=1, headless=False, take_screen
                     "total_queries": len(queries),
                     "results": results,
                 }, f, indent=2, ensure_ascii=False)
+
+            # Rate limit delay
+            if query_no < len(queries):
+                print(f"    Waiting {query_delay}s before next query...")
+                time.sleep(query_delay)
 
         context.close()
 
@@ -305,8 +347,12 @@ def main():
     parser.add_argument("--csv", type=str, help="Path to queries CSV file")
     parser.add_argument("--dataset", type=str, default=None,
                         help="Dataset tag for filenames (default: CSV stem)")
+    parser.add_argument("--server-log", type=str, default="",
+                        help="Path to server telemetry log file")
     parser.add_argument("--start", type=int, default=1,
                         help="Start from this query number (for resuming)")
+    parser.add_argument("--delay", type=int, default=60,
+                        help="Delay between queries in seconds (default: 60)")
     parser.add_argument("--headless", action="store_true",
                         help="Run in headless mode")
     parser.add_argument("--screenshots", action="store_true",
@@ -324,11 +370,19 @@ def main():
 
     if not AUTH_DIR.exists():
         print(f"Auth not found at {AUTH_DIR}")
-        print("Run: python tester.py --save-auth")
+        print("Run: python chatgpt_tester.py --save-auth")
         sys.exit(1)
 
-    run_queries(args.csv, args.dataset, args.start, args.headless,
-                take_screenshots=args.screenshots, mcp_name=args.mcp_name)
+    run_queries(
+        args.csv,
+        args.dataset,
+        server_log=args.server_log,
+        start_from=args.start,
+        headless=args.headless,
+        take_screenshots=args.screenshots,
+        mcp_name=args.mcp_name,
+        query_delay=args.delay,
+    )
 
 
 if __name__ == "__main__":
