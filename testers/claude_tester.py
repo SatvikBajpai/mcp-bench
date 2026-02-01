@@ -156,8 +156,11 @@ def get_response_text(page):
     """Extract the last assistant message text from the page."""
     # Claude uses different selectors - try multiple approaches
     selectors_to_try = [
+        'div[data-is-streaming="false"]',
+        'div[data-is-streaming]',
         'div.font-claude-message',
         'div[data-testid="assistant-message"]',
+        '[data-testid="chat-message-content"]',
         'div.prose',
     ]
 
