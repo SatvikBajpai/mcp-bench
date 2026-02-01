@@ -94,10 +94,10 @@ def wait_for_response(page, timeout_ms=180_000):
     2. Wait for streaming to stop.
     3. Extra settle time for rendering.
     """
-    # Wait for response to start
+    # Wait for response to start - look for any assistant message
     try:
         page.wait_for_selector(
-            'div[data-is-streaming="true"], div.font-claude-message',
+            '[data-testid="chat-message-content"]',
             state="attached",
             timeout=60_000,
         )
@@ -105,17 +105,17 @@ def wait_for_response(page, timeout_ms=180_000):
         print("    [warn] No response detected within 60s")
         return False
 
-    # Wait for streaming to finish (data-is-streaming="false" or element disappears)
-    try:
-        # Wait for streaming to stop
-        page.wait_for_function(
-            """() => {
-                const streaming = document.querySelector('div[data-is-streaming="true"]');
-                return !streaming;
-            }""",
-            timeout=timeout_ms,
-        )
-    except PwTimeout:
+    # Poll for streaming to finish (can't use wait_for_function due to CSP)
+    # Look for the stop button to disappear or absence of streaming indicators
+    start_time = time.time()
+    while time.time() - start_time < timeout_ms / 1000:
+        # Check if still streaming by looking for stop button or streaming indicators
+        stop_btn = page.locator('button[aria-label="Stop Response"], button:has-text("Stop")').first
+        if stop_btn.count() == 0 or not stop_btn.is_visible():
+            # No stop button visible = done streaming
+            break
+        time.sleep(2)
+    else:
         print("    [warn] Response still generating after timeout")
         return False
 
