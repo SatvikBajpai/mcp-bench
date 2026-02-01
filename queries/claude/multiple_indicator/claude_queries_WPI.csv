@@ -1,0 +1,16 @@
+no,query,indicators_tested,expected_outcome
+1,"Compare wholesale price trends of Primary articles and Manufactured products for 2023 Respond in chat, not in an artifact.","major_group:1100000000,major_group:1300000000",success
+2,"Analyze food inflation across Food articles, Milk, and Sugar for January to March 2024 Respond in chat, not in an artifact.","group:1101000000,item:1101030001,item:1301090001",success
+3,"Track fuel price movements across Coal, Mineral oils, and Electricity in 2022 Respond in chat, not in an artifact.","group:1201000000,group:1202000000,group:1203000000",success
+4,"Compare textile sector prices for Cotton yarn, Woollen yarn, and Synthetic fabric in fourth quarter 2023 Respond in chat, not in an artifact.","item:1304010001,item:1304010004,item:1304020003",success
+5,"Aggregate metal prices for Iron ore, Copper concentrate, Aluminum metal, Steel structures, and Brass metal in 2024 Respond in chat, not in an artifact.","item:1103010005,item:1103010006,item:1314090003,item:1315010005,item:1314090011",success
+6,"Evaluate agricultural commodity trends for Paddy, Wheat, Potato, and Onion during kharif season 2023 Respond in chat, not in an artifact.","item:1101010101,item:1101010102,item:1101020101,item:1101020103",success
+7,"Compare manufactured food products including Ghee, Butter, Bread, Sugar confectionary, and Instant coffee for 2022 to 2023 Respond in chat, not in an artifact.","item:1301050002,item:1301050003,item:1301080002,item:1301100002,item:1301120002",success
+8,"Analyze energy sector including Coking coal, LPG, HSD, Electricity, and Natural gas across 2020 to 2021 Respond in chat, not in an artifact.","item:1201010001,item:1202000001,item:1202000005,item:1203000001,item:1104000002",success
+9,"Track pharmaceutical sector for Antibiotics, Anti-inflammatory drugs, Anti-cancer drugs, and Ayurvedic medicaments in 2024 Respond in chat, not in an artifact.","item:1311010013,item:1311010001,item:1311010002,item:1311010009",success
+10,"Compare vehicle components including Engine, Piston ring, Brake pad, Gear box, and Head lamp in 2023 Respond in chat, not in an artifact.","item:1319020001,item:1319020007,item:1319020010,item:1319020012,item:1319020011",success
+11,"Aggregate chemical inputs including Caustic soda, Sulphuric acid, Urea, and Ammonia gas for industrial analysis in 2022 Respond in chat, not in an artifact.","item:1310010006,item:1310010019,item:1310020001,item:1310020007",success
+12,"Compare edible oils including Groundnut oil, Sunflower oil, Palm oil, and Mustard oil across 2021 to 2022 Respond in chat, not in an artifact.","item:1301040005,item:1301040004,item:1301040008,item:1301040002",success
+13,"Track cement sector trends for Ordinary Portland cement and White cement across non-existent year 2030 Respond in chat, not in an artifact.","item:1313050003,item:1313050006",no_data
+14,"Compare incompatible categories of Newspaper with Motor car tyre for invalid month 13 in 2023 Respond in chat, not in an artifact.","item:1309010001,item:1312010001",error
+15,"Analyze contradictory filters for Primary articles in sub-group level with item-level Cotton yarn for February 2025 Respond in chat, not in an artifact.","major_group:1100000000,item:1304010001",partial_data

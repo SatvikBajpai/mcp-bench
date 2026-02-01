@@ -1,0 +1,16 @@
+no,query,expected_outcome
+1,"Compare coal production vs imports for 2023-24 and analyze the gap between domestic supply and total energy needs Respond in chat, not in an artifact.",success
+2,"What is the total energy consumption trend from 2012-13 to 2023-24 comparing different measurements to validate conversion accuracy Respond in chat, not in an artifact.",success
+3,"Compare renewable energy supply for Solar Wind Others and Hydro vs fossil fuels for Coal Crude Oil Natural Gas for the last 5 years Respond in chat, not in an artifact.",success
+4,"Analyze industry sector final consumption by energy type in 2022-23 for Coal vs Natural Gas vs Electricity Respond in chat, not in an artifact.",success
+5,"Compare residential LPG consumption vs kerosene consumption trends from 2015-16 to 2023-24 to assess cooking fuel transition Respond in chat, not in an artifact.",success
+6,"What is the transport sector energy mix in 2023-24 comparing road diesel vs domestic aviation ATF vs rail consumption Respond in chat, not in an artifact.",success
+7,"Compare electricity output from main activity producer plants vs autoproducer plants for coal hydro nuclear across 2020-21 to 2023-24 Respond in chat, not in an artifact.",success
+8,"Analyze iron and steel industry energy consumption for Coal vs Electricity vs Natural Gas vs Oil Products in 2023-24 Respond in chat, not in an artifact.",success
+9,"Compare total primary energy supply growth rates between 2012-13 and 2023-24 for Coal Crude Oil and Natural Gas Respond in chat, not in an artifact.",success
+10,"What is the petroleum products breakdown for transport non-energy use for diesel LPG naphtha lubricants in 2023-24 Respond in chat, not in an artifact.",success
+11,"Compare exports vs imports for Crude Oil Coal and Natural Gas to calculate net energy trade balance for 2022-23 Respond in chat, not in an artifact.",success
+12,"Analyze chemical and petrochemical industry vs paper pulp industry comparing coal electricity and natural gas consumption for 2021-22 Respond in chat, not in an artifact.",success
+13,"Compare stock changes across all energy commodities in 2020-21 to identify which had largest inventory fluctuations during pandemic Respond in chat, not in an artifact.",success
+14,"Calculate total transport energy intensity by comparing road rail domestic aviation pipeline transport across diesel petrol ATF for 2023-24 and 2019-20 Respond in chat, not in an artifact.",success
+15,"Compare production data for Hydro vs Nuclear for 2023-24 while filtering by electricity output sector which should cause filter mismatch error Respond in chat, not in an artifact.",error

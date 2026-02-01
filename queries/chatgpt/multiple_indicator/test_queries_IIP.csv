@@ -1,0 +1,16 @@
+no,query,indicators_tested,expected_outcome
+1,Compare Mining and Manufacturing indices for 2023-24,"Mining (cat_1), Manufacturing (cat_2)",success
+2,"Show Primary Goods, Capital Goods and Intermediate Goods performance in 2022-23","Primary Goods (cat_5), Capital Goods (cat_6), Intermediate Goods (cat_7)",success
+3,"What's the trend for Mining, Electricity and General index from 2020-21 to 2023-24?","Mining (cat_1), Electricity (cat_3), General (cat_4)",success
+4,Compare Consumer Durables vs Consumer Non-durables across all available years,"Consumer Durables (cat_9), Consumer Non-durables (cat_10)",success
+5,"Give me Infrastructure/Construction Goods, Capital Goods, and Intermediate Goods for 2021-22 and 2022-23","Infrastructure/Construction Goods (cat_8), Capital Goods (cat_6), Intermediate Goods (cat_7)",success
+6,"How is mining, manufacturing, electricity and primary goods doing in 2023-24?","Mining (cat_1), Manufacturing (cat_2), Electricity (cat_3), Primary Goods (cat_5)",success
+7,Show all sectoral categories for 2019-20 and 2020-21,"Mining (cat_1), Manufacturing (cat_2), Electricity (cat_3)",success
+8,Compare all use-based categories for the year 2018-19,"Primary Goods (cat_5), Capital Goods (cat_6), Intermediate Goods (cat_7), Infrastructure/Construction Goods (cat_8), Consumer Durables (cat_9), Consumer Non-durables (cat_10)",success
+9,"What was the performance of General index, Mining, Manufacturing, Capital Goods and Consumer Durables in 2017-18?","General (cat_4), Mining (cat_1), Manufacturing (cat_2), Capital Goods (cat_6), Consumer Durables (cat_9)",success
+10,Compare Primary Goods and Capital goods for Maharashtra in 2023-24,"Primary Goods (cat_5), Capital Goods (cat_6)",no_data
+11,Show me Electricity and Mining trends from 2015-16 to 2024-25,"Electricity (cat_3), Mining (cat_1)",partial_data
+12,"Get Infrastructure Goods, Consumer Durables, Consumer Non-durables for 2024-25","Infrastructure/Construction Goods (cat_8), Consumer Durables (cat_9), Consumer Non-durables (cat_10)",success
+13,"Compare Manufacturing and General index performance during COVID years 2019-20, 2020-21, 2021-22","Manufacturing (cat_2), General (cat_4)",success
+14,What is the gap between Capital Goods and Consumer goods categories in 2016-17?,"Capital Goods (cat_6), Consumer Durables (cat_9), Consumer Non-durables (cat_10)",success
+15,Show all categories except subcategories for latest year 2023-24,All 10 main categories,success

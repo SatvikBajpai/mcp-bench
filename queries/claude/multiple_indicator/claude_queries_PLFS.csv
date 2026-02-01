@@ -1,0 +1,16 @@
+no,query,indicators_tested,expected_outcome
+1,"Compare unemployment rate and LFPR for females in Bihar for 2022-23 Respond in chat, not in an artifact.","UR (3), LFPR (1)",success
+2,"Show me WPR, LFPR, and unemployment rate for Maharashtra rural areas in 2021-22 Respond in chat, not in an artifact.","WPR (2), LFPR (1), UR (3)",success
+3,"What's the ratio of WPR to LFPR for males vs females in Tamil Nadu 2023-24? Respond in chat, not in an artifact.","WPR (2), LFPR (1)",success
+4,"give me unemployment LFPR WPR and worker distribution for UP graduates 2022-23 Respond in chat, not in an artifact.","UR (3), LFPR (1), WPR (2), Worker Distribution (4)",partial_data
+5,"How did unemployment rate and worker population ratio change between 2019-20 and 2022-23 in Kerala? Respond in chat, not in an artifact.","UR (3), WPR (2)",success
+6,"COMPARE CASUAL LABOUR WAGES VS REGULAR SALARY EARNINGS IN DELHI URBAN 2022-23!!! Respond in chat, not in an artifact.","Casual labour wages (7), Regular salary earnings (6)",success
+7,"Show LFPR, WPR, UR, percentage of workers, and avg self-employment earnings for all India Scheduled Caste population Respond in chat, not in an artifact.","LFPR (1), WPR (2), UR (3), Worker Distribution (4), Self-employment earnings (8)",partial_data
+8,"what is difference btw male n female unemployment in Rajstan rural 2020-21 Respond in chat, not in an artifact.",UR (3),success
+9,"Compare regular wage employees without written contracts vs without paid leave in Gujarat 2022-23 Respond in chat, not in an artifact.",Employment condition (5),success
+10,"Give me LFPR and worker distribution by industry for West Bengal manufacturing sector Respond in chat, not in an artifact.","LFPR (1), Worker Distribution (4)",partial_data
+11,"Show unemployment rate, WPR, and percentage of workers in tertiary sector for Punjab urban females aged 15-29 Respond in chat, not in an artifact.","UR (3), WPR (2), Worker Distribution (4)",success
+12,"Compare casual labour wages, regular salary, and self-employment income for Telangana in Q2 2022-23 Respond in chat, not in an artifact.","Casual labour wages (7), Regular salary (6), Self-employment earnings (8)",success
+13,"What's the trend in LFPR, unemployment rate and avg wage earnings from 2017-18 to 2023-24 for Christian women in Kerala rural? Respond in chat, not in an artifact.","LFPR (1), UR (3), Regular salary (6)",partial_data
+14,"show me worker distribution by enterprise size and employment condition percentage together for Karnataka Respond in chat, not in an artifact.","Worker Distribution (4), Employment condition (5)",error
+15,"Gimme UR WPR percentage distribution in agriculture vs construction for Jharkhand males 2021-22 Respond in chat, not in an artifact.","UR (3), WPR (2), Worker Distribution (4)",success
