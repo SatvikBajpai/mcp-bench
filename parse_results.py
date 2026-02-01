@@ -148,6 +148,17 @@ def parse_json_file(json_path: Path) -> list[dict]:
         data = json.load(f)
 
     dataset = data.get("dataset", "")
+
+    # Extract platform and mode from filename (e.g., chatgpt_PLFS_single_20260201_123456.json)
+    fname = json_path.stem
+    if fname.startswith("chatgpt_"):
+        platform = "chatgpt"
+    elif fname.startswith("claude_"):
+        platform = "claude"
+    else:
+        platform = "unknown"
+
+    mode = "multi" if "_multi_" in fname else "single"
     rows = []
 
     for result in data.get("results", []):
@@ -186,6 +197,8 @@ def parse_json_file(json_path: Path) -> list[dict]:
         all_calls_json = json.dumps(tool_all_calls, ensure_ascii=False, default=str)
 
         row = {
+            "platform": platform,
+            "mode": mode,
             "dataset": dataset,
             "no": result.get("no", ""),
             "query": result.get("query", ""),
@@ -244,7 +257,7 @@ def main():
     # Write CSV
     out_path = RESPONSES_DIR / "benchmark_results.csv"
     fieldnames = [
-        "dataset", "no", "query", "indicator_tested", "filters_tested",
+        "platform", "mode", "dataset", "no", "query", "indicator_tested", "filters_tested",
         "status", "dataset_routed_to", "correct_routing",
         "num_tool_calls", "tool_trace", "reached_get_data",
         "got_data", "had_timeout", "get_data_filters",
@@ -263,24 +276,33 @@ def main():
 
     # Print quick summary
     print("\n--- Summary ---")
+    platforms = sorted(set(r["platform"] for r in all_rows))
+    modes = sorted(set(r["mode"] for r in all_rows))
+    print(f"Platforms: {', '.join(platforms)}")
+    print(f"Modes: {', '.join(modes)}")
+    print()
+
     datasets = sorted(set(r["dataset"] for r in all_rows))
-    print(f"{'Dataset':<10} {'Total':>5} {'Data':>5} {'Empty':>5} {'Timeout':>7} {'Routing':>8}")
-    print("-" * 50)
-    for ds in datasets:
-        ds_rows = [r for r in all_rows if r["dataset"] == ds]
-        total = len(ds_rows)
-        got = sum(1 for r in ds_rows if r["got_data"] == "YES")
-        empty = sum(1 for r in ds_rows if r["got_data"] == "NO" and r["had_timeout"] == "NO")
-        timeout = sum(1 for r in ds_rows if r["had_timeout"] == "YES")
-        correct = sum(1 for r in ds_rows if r["correct_routing"] == "YES")
-        print(f"{ds:<10} {total:>5} {got:>5} {empty:>5} {timeout:>7} {correct:>5}/{total}")
+    print(f"{'Platform':<10} {'Mode':<8} {'Dataset':<10} {'Total':>5} {'Data':>5} {'Timeout':>7} {'Routing':>8}")
+    print("-" * 65)
+    for plat in platforms:
+        for m in modes:
+            for ds in datasets:
+                rows = [r for r in all_rows if r["platform"] == plat and r["mode"] == m and r["dataset"] == ds]
+                if not rows:
+                    continue
+                total = len(rows)
+                got = sum(1 for r in rows if r["got_data"] == "YES")
+                timeout = sum(1 for r in rows if r["had_timeout"] == "YES")
+                correct = sum(1 for r in rows if r["correct_routing"] == "YES")
+                print(f"{plat:<10} {m:<8} {ds:<10} {total:>5} {got:>5} {timeout:>7} {correct:>5}/{total}")
 
     totals = len(all_rows)
     total_got = sum(1 for r in all_rows if r["got_data"] == "YES")
     total_timeout = sum(1 for r in all_rows if r["had_timeout"] == "YES")
     total_correct = sum(1 for r in all_rows if r["correct_routing"] == "YES")
-    print("-" * 50)
-    print(f"{'TOTAL':<10} {totals:>5} {total_got:>5} {'':>5} {total_timeout:>7} {total_correct:>5}/{totals}")
+    print("-" * 65)
+    print(f"{'TOTAL':<10} {'':<8} {'':<10} {totals:>5} {total_got:>5} {total_timeout:>7} {total_correct:>5}/{totals}")
 
 
 if __name__ == "__main__":

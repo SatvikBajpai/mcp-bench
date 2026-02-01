@@ -413,10 +413,12 @@ def main():
     print(f"\nResults written to: {out_path}")
     print(f"Total queries judged: {len(results)}")
 
-    print("\n" + "=" * 70)
+    print("\n" + "=" * 85)
     print("BENCHMARK SUMMARY")
-    print("=" * 70)
+    print("=" * 85)
 
+    platforms = sorted(set(r.get("platform", "unknown") for r in results))
+    modes = sorted(set(r.get("mode", "single") for r in results))
     datasets = sorted(set(r.get("dataset", "") for r in results))
 
     def safe_avg(values):
@@ -429,41 +431,45 @@ def main():
         except (ValueError, TypeError):
             return None
 
-    header = f"{'Dataset':<10} {'Routing':>8} {'Order':>8} {'Filter':>8} {'Data':>8} {'Response':>8} {'Behavior':>8} {'Avg':>6}"
+    header = f"{'Platform':<10} {'Mode':<6} {'Dataset':<8} {'Routing':>7} {'Order':>7} {'Filter':>7} {'Data':>7} {'Resp':>7} {'Behav':>7} {'Avg':>6}"
     print(header)
     print("-" * len(header))
 
     all_scores = {k: [] for k in ["routing", "ordering", "filter", "data", "response", "behavior"]}
 
-    for ds in datasets:
-        ds_rows = [r for r in results if r.get("dataset") == ds]
+    for plat in platforms:
+        for m in modes:
+            for ds in datasets:
+                rows = [r for r in results if r.get("platform") == plat and r.get("mode") == m and r.get("dataset") == ds]
+                if not rows:
+                    continue
 
-        routing = [to_num(r["score_routing"]) for r in ds_rows]
-        ordering = [to_num(r["score_ordering"]) for r in ds_rows]
-        filt = [to_num(r["score_filter_accuracy"]) for r in ds_rows]
-        data = [to_num(r["score_data_retrieval"]) for r in ds_rows]
-        resp = [to_num(r["score_response_quality"]) for r in ds_rows]
-        behav = [to_num(r["score_behavior"]) for r in ds_rows]
+                routing = [to_num(r["score_routing"]) for r in rows]
+                ordering = [to_num(r["score_ordering"]) for r in rows]
+                filt = [to_num(r["score_filter_accuracy"]) for r in rows]
+                data = [to_num(r["score_data_retrieval"]) for r in rows]
+                resp = [to_num(r["score_response_quality"]) for r in rows]
+                behav = [to_num(r["score_behavior"]) for r in rows]
 
-        all_scores["routing"].extend(routing)
-        all_scores["ordering"].extend(ordering)
-        all_scores["filter"].extend(filt)
-        all_scores["data"].extend(data)
-        all_scores["response"].extend(resp)
-        all_scores["behavior"].extend(behav)
+                all_scores["routing"].extend(routing)
+                all_scores["ordering"].extend(ordering)
+                all_scores["filter"].extend(filt)
+                all_scores["data"].extend(data)
+                all_scores["response"].extend(resp)
+                all_scores["behavior"].extend(behav)
 
-        avgs = [safe_avg(routing), safe_avg(ordering), safe_avg(filt),
-                safe_avg(data), safe_avg(resp), safe_avg(behav)]
-        overall = safe_avg(avgs)
+                avgs = [safe_avg(routing), safe_avg(ordering), safe_avg(filt),
+                        safe_avg(data), safe_avg(resp), safe_avg(behav)]
+                overall = safe_avg(avgs)
 
-        print(f"{ds:<10} {avgs[0]:>7.0%} {avgs[1]:>7.0%} {avgs[2]:>7.0%} "
-              f"{avgs[3]:>7.0%} {avgs[4]:>7.0%} {avgs[5]:>7.0%} {overall:>5.0%}")
+                print(f"{plat:<10} {m:<6} {ds:<8} {avgs[0]:>6.0%} {avgs[1]:>6.0%} {avgs[2]:>6.0%} "
+                      f"{avgs[3]:>6.0%} {avgs[4]:>6.0%} {avgs[5]:>6.0%} {overall:>5.0%}")
 
     print("-" * len(header))
     avgs = [safe_avg(all_scores[k]) for k in ["routing", "ordering", "filter", "data", "response", "behavior"]]
     overall = safe_avg(avgs)
-    print(f"{'OVERALL':<10} {avgs[0]:>7.0%} {avgs[1]:>7.0%} {avgs[2]:>7.0%} "
-          f"{avgs[3]:>7.0%} {avgs[4]:>7.0%} {avgs[5]:>7.0%} {overall:>5.0%}")
+    print(f"{'OVERALL':<10} {'':<6} {'':<8} {avgs[0]:>6.0%} {avgs[1]:>6.0%} {avgs[2]:>6.0%} "
+          f"{avgs[3]:>6.0%} {avgs[4]:>6.0%} {avgs[5]:>6.0%} {overall:>5.0%}")
 
 
 if __name__ == "__main__":

@@ -211,8 +211,11 @@ def run_queries(
         return
 
     tag = dataset_tag or Path(csv_path).stem
+    # Detect mode from path
+    mode = "multi" if "multiple" in csv_path else "single"
     results = []
-    results_path = RESPONSES_DIR / f"{tag}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    # Filename: chatgpt_{dataset}_{mode}_{timestamp}.json
+    results_path = RESPONSES_DIR / f"chatgpt_{tag}_{mode}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
     print(f"Loaded {len(queries)} queries from {csv_path}")
     print(f"Starting from query #{start_from}")
