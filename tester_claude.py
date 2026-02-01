@@ -26,7 +26,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
 
-BASE_DIR = Path(__file__).parent.parent
+BASE_DIR = Path(__file__).parent
 SCREENSHOTS_DIR = BASE_DIR / "screenshots_claude"
 RESPONSES_DIR = BASE_DIR / "responses_claude"
 AUTH_DIR = BASE_DIR / "browser_data_claude"
@@ -90,97 +90,56 @@ def wait_for_response(page, timeout_ms=180_000):
     """
     Wait until Claude finishes generating.
 
-    1. Wait for any response content to appear.
+    1. Wait for streaming indicator or response to appear.
     2. Wait for streaming to stop.
     3. Extra settle time for rendering.
     """
-    # Multiple selectors to detect response start
-    response_selectors = [
-        '[data-testid="chat-message-content"]',
-        'div.font-claude-message',
-        'div[data-is-streaming]',
-        '[data-testid="assistant-message"]',
-        'div.prose',  # Common markdown container
-    ]
+    # Wait for response to start
+    try:
+        page.wait_for_selector(
+            'div[data-is-streaming="true"], div.font-claude-message',
+            state="attached",
+            timeout=60_000,
+        )
+    except PwTimeout:
+        print("    [warn] No response detected within 60s")
+        return False
 
-    # Wait for response to start - try multiple selectors
-    response_found = False
-    for selector in response_selectors:
-        try:
-            page.wait_for_selector(selector, state="attached", timeout=10_000)
-            response_found = True
-            print(f"    [debug] Response detected via: {selector}")
-            break
-        except PwTimeout:
-            continue
-
-    if not response_found:
-        # Last resort: wait a bit and check if page content changed
-        print("    [warn] No response selector matched, waiting 30s...")
-        time.sleep(30)
-
-    # Poll for streaming to finish (can't use wait_for_function due to CSP)
-    # Look for stop button to disappear
-    start_time = time.time()
-    while time.time() - start_time < timeout_ms / 1000:
-        # Multiple stop button selectors
-        stop_selectors = [
-            'button[aria-label="Stop Response"]',
-            'button[aria-label="Stop generating"]',
-            'button:has-text("Stop")',
-        ]
-        stop_visible = False
-        for sel in stop_selectors:
-            try:
-                btn = page.locator(sel).first
-                if btn.count() > 0 and btn.is_visible():
-                    stop_visible = True
-                    break
-            except:
-                continue
-
-        if not stop_visible:
-            # No stop button visible = done streaming
-            break
-        time.sleep(2)
-    else:
+    # Wait for streaming to finish (data-is-streaming="false" or element disappears)
+    try:
+        # Wait for streaming to stop
+        page.wait_for_function(
+            """() => {
+                const streaming = document.querySelector('div[data-is-streaming="true"]');
+                return !streaming;
+            }""",
+            timeout=timeout_ms,
+        )
+    except PwTimeout:
         print("    [warn] Response still generating after timeout")
         return False
 
     # Let final content settle
-    time.sleep(10)
+    time.sleep(5)
     return True
 
 
 def get_response_text(page):
-    """Extract the full assistant response text from the page."""
-    # Try to get the full response container first (contains all paragraphs)
-    container_selectors = [
-        'div[data-is-streaming="false"]',
-        'div[data-is-streaming]',
+    """Extract the last assistant message text from the page."""
+    # Claude uses different selectors - try multiple approaches
+    selectors_to_try = [
         'div.font-claude-message',
-        '[data-testid="chat-message-content"]',
+        'div[data-testid="assistant-message"]',
         'div.prose',
     ]
 
-    for selector in container_selectors:
+    for selector in selectors_to_try:
         messages = page.locator(selector)
         count = messages.count()
         if count > 0:
-            # Get the last message container's full text
-            text = messages.nth(count - 1).inner_text()
-            if text and len(text) > 20:
-                return text
+            return messages.nth(count - 1).inner_text()
 
-    # Fallback: collect all response paragraphs
-    try:
-        paragraphs = page.locator('p.font-claude-response-body').all()
-        if paragraphs:
-            return '\n\n'.join(p.inner_text() for p in paragraphs)
-    except:
-        pass
-
-    # Last resort: get all text from main
+    # Fallback: get all text from the conversation area
     try:
         conv = page.locator('main').first
         return conv.inner_text()
@@ -252,11 +211,8 @@ def run_queries(
         return
 
     tag = dataset_tag or Path(csv_path).stem
-    # Detect mode from path
-    mode = "multi" if "multiple" in csv_path else "single"
     results = []
-    # Filename: claude_{dataset}_{mode}_{timestamp}.json
-    results_path = RESPONSES_DIR / f"claude_{tag}_{mode}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    results_path = RESPONSES_DIR / f"{tag}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
     print(f"Loaded {len(queries)} queries from {csv_path}")
     print(f"Starting from query #{start_from}")

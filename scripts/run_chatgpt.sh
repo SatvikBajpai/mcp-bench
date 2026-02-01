@@ -12,7 +12,7 @@ if [[ "$MODE" != "single_indicator" && "$MODE" != "multiple_indicator" ]]; then
 fi
 
 echo "Running ChatGPT tests: $MODE"
-> "$LOG"
+# NOTE: Don't truncate LOG here - server is writing to it. Truncate before starting server.
 rm -f responses/*.json responses/*.csv
 
 for ds in PLFS CPI IIP ASI NAS WPI ENERGY; do
