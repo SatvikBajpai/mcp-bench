@@ -152,12 +152,12 @@ def wait_for_response(page, timeout_ms=180_000):
     time.sleep(5)
     last_para_count = 0
     stable_count = 0
-    for _ in range(20):  # Max 40 seconds additional wait
+    for _ in range(45):  # Max 90 seconds additional wait
         try:
             para_count = page.locator('p.font-claude-response-body').count()
             if para_count == last_para_count and para_count > 0:
                 stable_count += 1
-                if stable_count >= 5:  # Stable for 10 seconds
+                if stable_count >= 7:  # Stable for 14 seconds
                     print(f"    [debug] Content stable at {para_count} paragraphs")
                     break
             else:
