@@ -339,66 +339,67 @@ def run_queries(
 
             print(f"[{query_no}/{len(queries)}] {query[:80]}...")
 
-            # Snapshot server log before query
-            log_before = read_server_log(server_log)
-
-            start_new_chat(page)
-
-            # Send query
+            # Wrap entire query processing in try-except to skip on any error
             try:
+                # Snapshot server log before query
+                log_before = read_server_log(server_log)
+
+                start_new_chat(page)
+
+                # Send query
                 send_query(page, query)
-            except Exception as e:
-                print(f"    [ERROR] Failed to send: {e}")
+
+                # Wait for response
+                success = wait_for_response(page, timeout_ms=180_000)
+
+                # Capture response text
+                response_text = get_response_text(page)
+                print(f"    Response: {response_text[:120]}...")
+
+                # Snapshot server log after
+                log_after = read_server_log(server_log)
+                new_log = ""
+                if log_after and log_before:
+                    new_log = log_after[len(log_before):] if log_after.startswith(log_before) else log_after
+                elif log_after:
+                    new_log = log_after
+
+                # Optional screenshot
+                ss_name = ""
+                if take_screenshots:
+                    page.evaluate("window.scrollTo(0, 0)")
+                    time.sleep(1)
+                    ss_name = f"{tag}_{query_no:02d}.png"
+                    ss_path = SCREENSHOTS_DIR / ss_name
+                    page.screenshot(path=str(ss_path), full_page=True)
+                    print(f"    Screenshot: {ss_path}")
+
+                status = "PASS" if success else "TIMEOUT"
                 results.append({
                     "no": query_no,
                     "query": query,
                     "indicator_tested": row.get("indicator_tested", ""),
                     "filters_tested": row.get("filters_tested", ""),
-                    "status": "SEND_ERROR",
+                    "status": status,
+                    "response_text": response_text,
+                    "server_log": new_log,
+                    "screenshot": ss_name,
+                })
+
+            except Exception as e:
+                print(f"    [ERROR] Query failed, skipping: {e}")
+                results.append({
+                    "no": query_no,
+                    "query": query,
+                    "indicator_tested": row.get("indicator_tested", ""),
+                    "filters_tested": row.get("filters_tested", ""),
+                    "status": "ERROR",
                     "response_text": "",
                     "server_log": "",
                     "error": str(e),
                 })
-                continue
 
-            # Wait for response
-            success = wait_for_response(page, timeout_ms=180_000)
-
-            # Capture response text
-            response_text = get_response_text(page)
-            print(f"    Response: {response_text[:120]}...")
-
-            # Snapshot server log after
-            log_after = read_server_log(server_log)
-            new_log = ""
-            if log_after and log_before:
-                new_log = log_after[len(log_before):] if log_after.startswith(log_before) else log_after
-            elif log_after:
-                new_log = log_after
-
-            # Optional screenshot
-            ss_name = ""
-            if take_screenshots:
-                page.evaluate("window.scrollTo(0, 0)")
-                time.sleep(1)
-                ss_name = f"{tag}_{query_no:02d}.png"
-                ss_path = SCREENSHOTS_DIR / ss_name
-                page.screenshot(path=str(ss_path), full_page=True)
-                print(f"    Screenshot: {ss_path}")
-
-            status = "PASS" if success else "TIMEOUT"
-            results.append({
-                "no": query_no,
-                "query": query,
-                "indicator_tested": row.get("indicator_tested", ""),
-                "filters_tested": row.get("filters_tested", ""),
-                "status": status,
-                "response_text": response_text,
-                "server_log": new_log,
-                "screenshot": ss_name,
-            })
-
-            # Save after each query
+            # Save after each query (outside try-except to always save progress)
             with open(results_path, "w", encoding="utf-8") as f:
                 json.dump({
                     "dataset": tag,
