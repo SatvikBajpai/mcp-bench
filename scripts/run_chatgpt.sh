@@ -1,24 +1,42 @@
 #!/bin/bash
 set -e
 cd "$(dirname "$0")/.."
-LOG="/tmp/mospi_telemetry.log"
 
-# Default to single_indicator, can override with argument
+LOG="/tmp/mospi_telemetry.log"
+ALL_DATASETS="PLFS CPI IIP ASI NAS WPI ENERGY"
+
+# Parse arguments
 MODE="${1:-single_indicator}"
+shift 2>/dev/null || true
 
 if [[ "$MODE" != "single_indicator" && "$MODE" != "multiple_indicator" ]]; then
-    echo "Usage: $0 [single_indicator|multiple_indicator]"
+    echo "Usage: $0 <single_indicator|multiple_indicator> [DATASET1 DATASET2 ...]"
+    echo ""
+    echo "Examples:"
+    echo "  $0 single_indicator              # Run all datasets"
+    echo "  $0 multiple_indicator CPI IIP    # Run only CPI and IIP"
+    echo "  $0 single_indicator PLFS         # Run only PLFS"
+    echo ""
+    echo "Available datasets: $ALL_DATASETS"
     exit 1
 fi
 
-echo "Running ChatGPT tests: $MODE"
-# NOTE: Don't truncate LOG here - server is writing to it. Truncate before starting server.
-rm -f responses/*.json responses/*.csv
+# Use provided datasets or default to all
+DATASETS="${*:-$ALL_DATASETS}"
 
-for ds in PLFS CPI IIP ASI NAS WPI ENERGY; do
+echo "Running ChatGPT tests: $MODE"
+echo "Datasets: $DATASETS"
+echo ""
+
+for ds in $DATASETS; do
+    CSV="queries/chatgpt/${MODE}/test_queries_${ds}.csv"
+    if [[ ! -f "$CSV" ]]; then
+        echo "WARNING: $CSV not found, skipping $ds"
+        continue
+    fi
     echo ">>> $ds at $(date)"
-    python testers/chatgpt_tester.py --dataset "$ds" --csv "queries/chatgpt/${MODE}/test_queries_${ds}.csv" --server-log "$LOG" --delay 60
+    python testers/chatgpt_tester.py --dataset "$ds" --csv "$CSV" --server-log "$LOG" --delay 60
 done
 
-python parse_results.py
-python judge.py
+echo ""
+echo "Done! Results in responses/"

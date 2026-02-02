@@ -5,8 +5,6 @@ browser_data_claude/
 # Test outputs
 screenshots/
 screenshots_claude/
-responses/
-responses_claude/
 
 # Python
 __pycache__/
