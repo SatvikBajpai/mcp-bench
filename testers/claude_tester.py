@@ -147,40 +147,87 @@ def wait_for_response(page, timeout_ms=180_000):
         print("    [warn] Response still generating after timeout")
         return False
 
-    # Let final content settle
-    time.sleep(10)
+    # Let final content settle - wait until paragraph count stabilizes
+    print("    [debug] Waiting for content to stabilize...")
+    time.sleep(5)
+    last_para_count = 0
+    stable_count = 0
+    for _ in range(20):  # Max 40 seconds additional wait
+        try:
+            para_count = page.locator('p.font-claude-response-body').count()
+            if para_count == last_para_count and para_count > 0:
+                stable_count += 1
+                if stable_count >= 5:  # Stable for 10 seconds
+                    print(f"    [debug] Content stable at {para_count} paragraphs")
+                    break
+            else:
+                stable_count = 0
+                last_para_count = para_count
+        except:
+            pass
+        time.sleep(2)
+
+    # Final settle
+    time.sleep(3)
     return True
 
 
 def get_response_text(page):
-    """Extract the full assistant response text from the page."""
-    # Try to get the full response container first (contains all paragraphs)
-    container_selectors = [
-        'div[data-is-streaming="false"]',
-        'div[data-is-streaming]',
-        'div.font-claude-message',
-        '[data-testid="chat-message-content"]',
-        'div.prose',
-    ]
+    """Extract the full assistant response text from the page, excluding MCP tool call UI."""
+    # Priority 1: Get prose paragraphs from the LAST assistant message only
+    # This excludes MCP tool call UI (Request/Response JSON blocks)
+    try:
+        # Find all assistant message containers
+        assistant_msgs = page.locator('div[data-is-streaming]').all()
+        if assistant_msgs:
+            last_msg = assistant_msgs[-1]
+            # Get only the prose paragraphs within the last message
+            paragraphs = last_msg.locator('p.font-claude-response-body').all()
+            if paragraphs:
+                text = '\n\n'.join(p.inner_text() for p in paragraphs)
+                if text and len(text) > 10:
+                    return text
+    except Exception as e:
+        print(f"    [debug] Assistant msg search failed: {e}")
 
-    for selector in container_selectors:
-        messages = page.locator(selector)
-        count = messages.count()
-        if count > 0:
-            # Get the last message container's full text
-            text = messages.nth(count - 1).inner_text()
-            if text and len(text) > 20:
-                return text
-
-    # Fallback: collect all response paragraphs
+    # Priority 2: Get all prose paragraphs (may include earlier messages)
     try:
         paragraphs = page.locator('p.font-claude-response-body').all()
         if paragraphs:
-            return '\n\n'.join(p.inner_text() for p in paragraphs)
+            text = '\n\n'.join(p.inner_text() for p in paragraphs)
+            if text and len(text) > 10:
+                return text
     except:
         pass
 
-    # Last resort: get all text from main
+    # Priority 3: Try font-claude-message but filter out tool UI text
+    try:
+        messages = page.locator('div.font-claude-message').all()
+        if messages:
+            last_msg = messages[-1]
+            text = last_msg.inner_text()
+            # Filter out obvious tool call UI patterns
+            lines = text.split('\n')
+            filtered = []
+            skip_until_blank = False
+            for line in lines:
+                line_stripped = line.strip()
+                # Skip tool UI markers
+                if line_stripped in ('Request', 'Response', '{', '}') or line_stripped.startswith('"'):
+                    skip_until_blank = True
+                    continue
+                if skip_until_blank and not line_stripped:
+                    skip_until_blank = False
+                    continue
+                if not skip_until_blank:
+                    filtered.append(line)
+            text = '\n'.join(filtered).strip()
+            if text and len(text) > 10:
+                return text
+    except:
+        pass
+
+    # Last resort: get main content
     try:
         conv = page.locator('main').first
         return conv.inner_text()
