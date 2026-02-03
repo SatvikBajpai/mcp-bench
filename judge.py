@@ -230,7 +230,6 @@ def call_judge(client, model: str, row: dict) -> dict:
                 response_mime_type="application/json",
                 response_json_schema=JudgeResult.model_json_schema(),
                 thinking_config=types.ThinkingConfig(
-                    thinking_level="high",
                     include_thoughts=True,
                 ),
             ),
