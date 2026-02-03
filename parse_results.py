@@ -227,12 +227,22 @@ def parse_json_file(json_path: Path) -> list[dict]:
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Parse MCP tester JSON results into CSV")
+    parser.add_argument("--dir", type=str, default=None,
+                        help="Directory containing JSON files and for output CSV (default: responses/)")
+    parser.add_argument("files", nargs="*", help="JSON files to parse (optional, defaults to all in --dir)")
+    args = parser.parse_args()
+
+    # Determine working directory
+    work_dir = Path(args.dir) if args.dir else RESPONSES_DIR
+
     # Find JSON files to parse
-    if len(sys.argv) > 1:
-        json_files = [Path(p) for p in sys.argv[1:]]
+    if args.files:
+        json_files = [Path(p) for p in args.files]
     else:
-        # Find latest JSON per dataset
-        all_jsons = sorted(RESPONSES_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime)
+        # Find latest JSON per dataset in work_dir
+        all_jsons = sorted(work_dir.glob("*.json"), key=lambda p: p.stat().st_mtime)
         # Group by dataset prefix, keep latest
         latest = {}
         for f in all_jsons:
@@ -241,7 +251,7 @@ def main():
         json_files = list(latest.values())
 
     if not json_files:
-        print("No JSON files found.")
+        print(f"No JSON files found in {work_dir}")
         return
 
     print(f"Parsing {len(json_files)} files:")
@@ -254,8 +264,8 @@ def main():
         all_rows.extend(rows)
         print(f"  {jf.name}: {len(rows)} queries")
 
-    # Write CSV
-    out_path = RESPONSES_DIR / "benchmark_results.csv"
+    # Write CSV to work_dir
+    out_path = work_dir / "benchmark_results.csv"
     fieldnames = [
         "platform", "mode", "dataset", "no", "query", "indicator_tested", "filters_tested",
         "status", "dataset_routed_to", "correct_routing",

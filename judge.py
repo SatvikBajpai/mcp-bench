@@ -257,8 +257,10 @@ def call_judge(client, model: str, row: dict) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="LLM Judge for MoSPI MCP Benchmark")
+    parser.add_argument("--dir", type=str, default=None,
+                        help="Directory containing benchmark_results.csv (default: responses/)")
     parser.add_argument("--csv", type=str, default=None,
-                        help="Path to benchmark_results.csv")
+                        help="Path to benchmark_results.csv (overrides --dir)")
     parser.add_argument("--model", type=str, default="gemini-3-pro-preview",
                         help="Gemini model for judging (default: gemini-3-pro-preview)")
     parser.add_argument("--start", type=int, default=1,
@@ -267,8 +269,11 @@ def main():
                         help="Delay between API calls in seconds")
     args = parser.parse_args()
 
+    # Determine working directory
+    work_dir = Path(args.dir) if args.dir else RESPONSES_DIR
+
     # Find CSV
-    csv_path = Path(args.csv) if args.csv else RESPONSES_DIR / "benchmark_results.csv"
+    csv_path = Path(args.csv) if args.csv else work_dir / "benchmark_results.csv"
     if not csv_path.exists():
         print(f"CSV not found: {csv_path}")
         print("Run parse_results.py first to generate benchmark_results.csv")
@@ -294,8 +299,8 @@ def main():
     print(f"Starting from row {args.start}")
     print()
 
-    # Output path
-    out_path = RESPONSES_DIR / "judge_results.csv"
+    # Output path (same directory as input)
+    out_path = work_dir / "judge_results.csv"
 
     # Output fieldnames
     out_fields = list(rows[0].keys()) + [
