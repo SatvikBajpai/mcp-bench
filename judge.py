@@ -9,7 +9,7 @@ data retrieval, response quality, and behavior compliance.
 Usage:
     python judge.py
     python judge.py --csv responses/benchmark_results.csv
-    python judge.py --model gemini-3-pro-preview
+    python judge.py --model gemini-2.5-pro-preview
 """
 
 import argparse
@@ -261,8 +261,8 @@ def main():
                         help="Directory containing benchmark_results.csv (default: responses/)")
     parser.add_argument("--csv", type=str, default=None,
                         help="Path to benchmark_results.csv (overrides --dir)")
-    parser.add_argument("--model", type=str, default="gemini-3-pro-preview",
-                        help="Gemini model for judging (default: gemini-3-pro-preview)")
+    parser.add_argument("--model", type=str, default="gemini-2.5-pro-preview",
+                        help="Gemini model for judging (default: gemini-2.5-pro-preview)")
     parser.add_argument("--start", type=int, default=1,
                         help="Start from this row number (for resuming)")
     parser.add_argument("--delay", type=float, default=1.0,
