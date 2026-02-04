@@ -100,7 +100,29 @@ echo "============================================"
 echo "ALL RE-RUNS COMPLETE!"
 echo "============================================"
 echo ""
-echo "Next steps:"
-echo "1. Check responses_claude/ for new JSON files"
-echo "2. Run: python parse_results.py --dir responses_claude/"
-echo "3. Run: python judge.py --dir responses_claude/"
+echo "Parsing results..."
+python parse_results.py --dir responses_claude/
+
+echo ""
+echo "============================================"
+echo "JUDGING ONLY RE-RUN QUERIES"
+echo "============================================"
+
+# Single indicator failures
+SINGLE_ONLY="CPI:2,CPI:10,CPI:11,CPI:12,IIP:3,IIP:4,IIP:5,IIP:6,ASI:3,NAS:1,NAS:2,NAS:7,NAS:10,WPI:4,WPI:5,ENERGY:7,ENERGY:8,ENERGY:9,ENERGY:14,ENERGY:15"
+
+# Multiple indicator failures
+MULTI_ONLY="ASI:1,ASI:3,ASI:4,ASI:8,ASI:9,ASI:15,CPI:2,CPI:4,CPI:7,CPI:11,CPI:12,CPI:14,ENERGY:2,ENERGY:4,ENERGY:8,ENERGY:13,IIP:4,IIP:9,IIP:10,IIP:12,NAS:1,NAS:2,NAS:9,NAS:10,NAS:14,PLFS:9,PLFS:13,PLFS:15,WPI:1,WPI:8,WPI:10,WPI:13,WPI:14"
+
+echo ""
+echo "Judging single indicator re-runs..."
+python judge.py --dir responses_claude/ --only "$SINGLE_ONLY"
+
+echo ""
+echo "Judging multiple indicator re-runs..."
+python judge.py --dir responses_claude/ --only "$MULTI_ONLY"
+
+echo ""
+echo "============================================"
+echo "DONE!"
+echo "============================================"

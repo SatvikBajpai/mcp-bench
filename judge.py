@@ -264,9 +264,22 @@ def main():
                         help="Gemini model for judging (default: gemini-2.5-pro)")
     parser.add_argument("--start", type=int, default=1,
                         help="Start from this row number (for resuming)")
+    parser.add_argument("--only", type=str, default=None,
+                        help="Only judge specific queries: 'dataset:no,dataset:no' e.g. 'CPI:2,CPI:10,ASI:3'")
+    parser.add_argument("--skip-judged", action="store_true",
+                        help="Skip rows that already have judge scores")
     parser.add_argument("--delay", type=float, default=1.0,
                         help="Delay between API calls in seconds")
     args = parser.parse_args()
+
+    # Parse --only into a set of (dataset, no) tuples
+    only_queries = None
+    if args.only:
+        only_queries = set()
+        for item in args.only.split(","):
+            parts = item.strip().split(":")
+            if len(parts) == 2:
+                only_queries.add((parts[0].strip().upper(), int(parts[1].strip())))
 
     # Determine working directory
     work_dir = Path(args.dir) if args.dir else RESPONSES_DIR
@@ -330,6 +343,18 @@ def main():
         ds = row.get("dataset", "")
         qno = row.get("no", "")
         query = row.get("query", "")[:60]
+
+        # Skip if --only is set and this query is not in the list
+        if only_queries and (ds.upper(), int(qno)) not in only_queries:
+            continue
+
+        # Skip if --skip-judged and this row already has scores
+        if args.skip_judged:
+            existing_score = row.get("total_score", "")
+            if existing_score and existing_score not in ["", "ERR", "0/6", "1/6", "2/6"]:
+                print(f"[{row_num}/{len(rows)}] {ds} Q{qno}: SKIPPED (already judged)")
+                continue
+
         print(f"[{row_num}/{len(rows)}] {ds} Q{qno}: {query}...")
 
         # Auto-score dimensions 1 & 2
