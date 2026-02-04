@@ -283,6 +283,7 @@ def run_queries(
     headless=False,
     take_screenshots=False,
     query_delay=60,
+    max_retries=3,
 ):
     """Read CSV, send each query, capture response text and server log."""
     RESPONSES_DIR.mkdir(exist_ok=True)
@@ -342,65 +343,89 @@ def run_queries(
 
             print(f"[{query_no}/{len(queries)}] {query[:80]}...")
 
-            # Wrap entire query processing in try-except to skip on any error
-            try:
-                # Snapshot server log before query
-                log_before = read_server_log(server_log)
+            # Retry logic
+            result_row = None
 
-                start_new_chat(page)
+            for attempt in range(1, max_retries + 1):
+                try:
+                    if attempt > 1:
+                        print(f"    [RETRY {attempt}/{max_retries}] Retrying query...")
+                        time.sleep(10)  # Extra wait before retry
 
-                # Send query
-                send_query(page, query)
+                    # Snapshot server log before query
+                    log_before = read_server_log(server_log)
 
-                # Wait for response
-                success = wait_for_response(page, timeout_ms=180_000)
+                    start_new_chat(page)
 
-                # Capture response text
-                response_text = get_response_text(page)
-                print(f"    Response: {response_text[:120]}...")
+                    # Send query
+                    send_query(page, query)
 
-                # Snapshot server log after
-                log_after = read_server_log(server_log)
-                new_log = ""
-                if log_after and log_before:
-                    new_log = log_after[len(log_before):] if log_after.startswith(log_before) else log_after
-                elif log_after:
-                    new_log = log_after
+                    # Wait for response
+                    success = wait_for_response(page, timeout_ms=180_000)
 
-                # Optional screenshot
-                ss_name = ""
-                if take_screenshots:
-                    page.evaluate("window.scrollTo(0, 0)")
-                    time.sleep(1)
-                    ss_name = f"{tag}_{query_no:02d}.png"
-                    ss_path = SCREENSHOTS_DIR / ss_name
-                    page.screenshot(path=str(ss_path), full_page=True)
-                    print(f"    Screenshot: {ss_path}")
+                    # Capture response text
+                    response_text = get_response_text(page)
 
-                status = "PASS" if success else "TIMEOUT"
-                results.append({
-                    "no": query_no,
-                    "query": query,
-                    "indicator_tested": row.get("indicator_tested", ""),
-                    "filters_tested": row.get("filters_tested", ""),
-                    "status": status,
-                    "response_text": response_text,
-                    "server_log": new_log,
-                    "screenshot": ss_name,
-                })
+                    # Check if we got a valid response
+                    if not response_text or len(response_text.strip()) < 20:
+                        raise Exception("Empty or too short response captured")
 
-            except Exception as e:
-                print(f"    [ERROR] Query failed, skipping: {e}")
-                results.append({
-                    "no": query_no,
-                    "query": query,
-                    "indicator_tested": row.get("indicator_tested", ""),
-                    "filters_tested": row.get("filters_tested", ""),
-                    "status": "ERROR",
-                    "response_text": "",
-                    "server_log": "",
-                    "error": str(e),
-                })
+                    print(f"    Response: {response_text[:120]}...")
+
+                    # Snapshot server log after
+                    log_after = read_server_log(server_log)
+                    new_log = ""
+                    if log_after and log_before:
+                        new_log = log_after[len(log_before):] if log_after.startswith(log_before) else log_after
+                    elif log_after:
+                        new_log = log_after
+
+                    # Optional screenshot
+                    ss_name = ""
+                    if take_screenshots:
+                        page.evaluate("window.scrollTo(0, 0)")
+                        time.sleep(1)
+                        ss_name = f"{tag}_{query_no:02d}.png"
+                        ss_path = SCREENSHOTS_DIR / ss_name
+                        page.screenshot(path=str(ss_path), full_page=True)
+                        print(f"    Screenshot: {ss_path}")
+
+                    status = "PASS" if success else "TIMEOUT"
+                    result_row = {
+                        "no": query_no,
+                        "query": query,
+                        "indicator_tested": row.get("indicator_tested", ""),
+                        "filters_tested": row.get("filters_tested", ""),
+                        "status": status,
+                        "response_text": response_text,
+                        "server_log": new_log,
+                        "screenshot": ss_name,
+                    }
+                    break  # Success, exit retry loop
+
+                except Exception as e:
+                    print(f"    [ERROR] Attempt {attempt} failed: {e}")
+                    if attempt == max_retries:
+                        print(f"    [FAILED] All {max_retries} attempts failed, skipping query")
+                        result_row = {
+                            "no": query_no,
+                            "query": query,
+                            "indicator_tested": row.get("indicator_tested", ""),
+                            "filters_tested": row.get("filters_tested", ""),
+                            "status": "ERROR",
+                            "response_text": "",
+                            "server_log": "",
+                            "error": str(e),
+                        }
+                    else:
+                        # Try to recover browser state before retry
+                        try:
+                            page.goto("https://claude.ai/new", timeout=30000)
+                            time.sleep(5)
+                        except:
+                            pass
+
+            results.append(result_row)
 
             # Save after each query (outside try-except to always save progress)
             with open(results_path, "w", encoding="utf-8") as f:
@@ -444,6 +469,8 @@ def main():
                         help="Only run specific query numbers (comma-separated, e.g., '2,4,7,10')")
     parser.add_argument("--delay", type=int, default=60,
                         help="Delay between queries in seconds (default: 60)")
+    parser.add_argument("--retries", type=int, default=3,
+                        help="Number of retries per query on failure (default: 3)")
     parser.add_argument("--headless", action="store_true",
                         help="Run in headless mode")
     parser.add_argument("--screenshots", action="store_true",
@@ -476,6 +503,7 @@ def main():
         headless=args.headless,
         take_screenshots=args.screenshots,
         query_delay=args.delay,
+        max_retries=args.retries,
     )
 
 
