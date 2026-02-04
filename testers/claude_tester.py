@@ -279,6 +279,7 @@ def run_queries(
     dataset_tag,
     server_log="",
     start_from=1,
+    only_queries=None,
     headless=False,
     take_screenshots=False,
     query_delay=60,
@@ -335,6 +336,8 @@ def run_queries(
             query = row["query"]
 
             if query_no < start_from:
+                continue
+            if only_queries and query_no not in only_queries:
                 continue
 
             print(f"[{query_no}/{len(queries)}] {query[:80]}...")
@@ -437,6 +440,8 @@ def main():
                         help="Path to server telemetry log file")
     parser.add_argument("--start", type=int, default=1,
                         help="Start from this query number (for resuming)")
+    parser.add_argument("--only", type=str, default=None,
+                        help="Only run specific query numbers (comma-separated, e.g., '2,4,7,10')")
     parser.add_argument("--delay", type=int, default=60,
                         help="Delay between queries in seconds (default: 60)")
     parser.add_argument("--headless", action="store_true",
@@ -457,11 +462,17 @@ def main():
         print("Run: python tester_claude.py --save-auth")
         sys.exit(1)
 
+    # Parse --only into a set of query numbers
+    only_queries = None
+    if args.only:
+        only_queries = set(int(x.strip()) for x in args.only.split(","))
+
     run_queries(
         args.csv,
         args.dataset,
         server_log=args.server_log,
         start_from=args.start,
+        only_queries=only_queries,
         headless=args.headless,
         take_screenshots=args.screenshots,
         query_delay=args.delay,
