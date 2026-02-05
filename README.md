@@ -1,129 +1,105 @@
 # MCP Bench
 
-Benchmark suite for evaluating MCP (Model Context Protocol) tool-use accuracy across LLMs. Tests how well LLMs interact with the MoSPI government statistics API through a 4-step tool chain.
+A benchmark for evaluating how well LLMs use MCP (Model Context Protocol) tools. Tests ChatGPT and Claude.ai against the MoSPI government statistics API.
 
-## Structure
+## Results
+
+| Platform | Mode | Queries | Overall | Routing | Ordering | Filter | Data | Response | Behavior |
+|----------|------|---------|---------|---------|----------|--------|------|----------|----------|
+| Claude | Single | 107 | **89%** | 89% | 93% | 91% | 94% | 75% | 93% |
+| Claude | Multi | 105 | **85%** | 82% | 90% | 95% | 89% | 66% | 90% |
+| ChatGPT | Single | 98 | **91%** | 89% | 95% | 85% | 92% | 94% | 91% |
+| ChatGPT | Multi | 105 | **82%** | 87% | 84% | 78% | 83% | 82% | 78% |
+
+## What It Tests
+
+The MoSPI API requires a strict 4-step tool chain:
+
+```
+1_know_about_mospi_api → 2_get_indicators → 3_get_metadata → 4_get_data
+```
+
+Each query tests whether the LLM can:
+1. Route to the correct dataset
+2. Follow the tool order
+3. Pass correct filter codes
+4. Retrieve actual data
+5. Report accurate numbers
+6. Avoid fabrication
+
+## Scoring Rubric
+
+| Dimension | Method | Criteria |
+|-----------|--------|----------|
+| **Routing** | Auto | Correct dataset selected |
+| **Ordering** | Auto | Tools called in 1→2→3→4 order |
+| **Filter Accuracy** | LLM Judge | Correct codes from metadata passed to get_data |
+| **Data Retrieval** | LLM Judge | get_data returned actual data |
+| **Response Quality** | LLM Judge | Numbers match API output |
+| **Behavior** | LLM Judge | No web search or fabrication |
+
+## Project Structure
 
 ```
 mcp-bench/
-├── testers/
-│   ├── chatgpt_tester.py          # Playwright automation for ChatGPT
-│   └── claude_tester.py           # Playwright automation for Claude.ai
 ├── queries/
 │   ├── chatgpt/
-│   │   └── multiple_indicator/    # Multi-indicator query CSVs
+│   │   ├── single_indicator/     # 107 single-indicator queries
+│   │   └── multiple_indicator/   # 105 multi-indicator queries
 │   └── claude/
-│       ├── single_indicator/      # Single-indicator query CSVs
-│       └── multiple_indicator/    # Multi-indicator query CSVs
+│       ├── single_indicator/
+│       └── multiple_indicator/
+├── responses/                    # ChatGPT results
+│   └── benchmark_results/
+│       ├── benchmark_results_*.csv
+│       └── judge_results_*.csv
+├── responses_claude/             # Claude results
+│   └── benchmark_results/
+├── testers/
+│   ├── chatgpt_tester.py        # Playwright automation
+│   └── claude_tester.py
 ├── scripts/
-│   ├── run_chatgpt.sh             # Run all datasets on ChatGPT
-│   └── run_claude.sh              # Run all/custom datasets on Claude
-├── responses/
-│   └── benchmark_results/         # ChatGPT benchmark + judge CSVs
-├── responses_claude/
-│   └── benchmark_results/         # Claude benchmark + judge CSVs
-├── parse_results.py               # Parse JSON responses into benchmark CSV
-├── judge.py                       # LLM-as-Judge evaluation using Gemini
-└── requirements.txt
+│   ├── run_chatgpt.sh
+│   └── run_claude.sh
+├── parse_results.py              # JSON → CSV
+└── judge.py                      # LLM-as-Judge scoring
 ```
 
-## Setup
+## Quick Start
 
 ```bash
+# Install
 pip install -r requirements.txt
 playwright install chromium
-```
 
-## Usage
-
-### 1. Save Auth (one-time per platform)
-
-```bash
+# Authenticate (one-time)
 python testers/chatgpt_tester.py --save-auth
 python testers/claude_tester.py --save-auth
-```
 
-Opens a browser — log in, connect your MCP server, then close the window.
-
-### 2. Run Tests
-
-**All datasets:**
-```bash
+# Run benchmarks
 ./scripts/run_chatgpt.sh
 ./scripts/run_claude.sh
-```
 
-**Custom datasets (Claude):**
-```bash
-./scripts/run_claude.sh single_indicator CPI IIP ENERGY
-./scripts/run_claude.sh multiple_indicator PLFS NAS
-```
-
-**Single dataset with options:**
-```bash
-python testers/claude_tester.py \
-    --dataset PLFS \
-    --csv queries/claude/single_indicator/claude_queries_PLFS.csv \
-    --server-log /tmp/mospi_telemetry.log \
-    --delay 60 \
-    --retries 3 \
-    --only "2,5,10"    # Re-run specific query numbers only
-```
-
-### 3. Parse Results
-
-```bash
-# Parse all JSONs in a directory (deduplicates automatically)
-python parse_results.py --dir responses_claude/benchmark_results
-
-# Parse specific files
-python parse_results.py --dir responses_claude/benchmark_results responses_claude/benchmark_results/claude_*_single_*.json
-```
-
-Output: `benchmark_results.csv` in the specified directory.
-
-### 4. Judge Results
-
-```bash
+# Parse and judge
 export GEMINI_API_KEY='your_key'
-
-# Judge all queries
-python judge.py \
-    --csv responses_claude/benchmark_results/benchmark_results_single_indicator.csv \
-    --dir responses_claude/benchmark_results
-
-# Re-judge specific queries only (merges into existing judge CSV)
-python judge.py \
-    --csv responses_claude/benchmark_results/benchmark_results_multiple_indicators.csv \
-    --dir responses_claude/benchmark_results \
-    --only "ASI:1,CPI:2,NAS:10"
+python parse_results.py --dir responses/benchmark_results
+python judge.py --csv responses/benchmark_results/benchmark_results.csv --dir responses/benchmark_results
 ```
-
-Output: `judge_results.csv` in the specified directory.
-
-## Evaluation Rubric
-
-The judge scores 6 dimensions (0 or 1 each, max 6/6):
-
-| # | Dimension | Auto/LLM | What it checks |
-|---|-----------|----------|----------------|
-| 1 | **Routing** | Auto | Routed to the correct dataset? |
-| 2 | **Ordering** | Auto | Tools called in 1→2→3→4 order? |
-| 3 | **Filter Accuracy** | LLM | Correct filter codes passed to get_data? |
-| 4 | **Data Retrieval** | LLM | Did get_data return actual data? |
-| 5 | **Response Quality** | LLM | Numbers in response match API output? |
-| 6 | **Behavior Compliance** | LLM | No web search, no fabrication? |
 
 ## Datasets
 
-7 MoSPI datasets, 15 queries each: **PLFS**, **CPI**, **IIP**, **ASI**, **NAS**, **WPI**, **ENERGY**
+7 MoSPI datasets, 15 queries each:
 
-Two test modes:
-- **Single indicator** — one indicator per query
-- **Multiple indicator** — compare/analyze multiple indicators per query
+| Dataset | Description |
+|---------|-------------|
+| PLFS | Labour force, employment, wages |
+| CPI | Consumer price indices |
+| IIP | Industrial production indices |
+| ASI | Annual survey of industries |
+| NAS | National accounts (GDP, GVA) |
+| WPI | Wholesale price indices |
+| ENERGY | Energy statistics |
 
-## Environment Variables
+## License
 
-```bash
-export GEMINI_API_KEY=your_key    # Required for judge.py (Gemini 2.5 Pro)
-```
+MIT
