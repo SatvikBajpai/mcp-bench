@@ -1,0 +1,16 @@
+no,query,indicator_tested,filters_tested
+1,What is the unemployment rate for rural males in Bihar during 2022-23?,UR (indicator_code=3),"state_code,gender_code,sector_code,year"
+2,Show me LFPR for women aged 15-29 in urban Kerala using CWS approach,LFPR (indicator_code=1),"state_code,gender_code,age_code,sector_code,weekly_status_code"
+3,worker population ratio among scheduled tribes in Rajasthan 2023-24,WPR (indicator_code=2),"state_code,social_category_code,year"
+4,What percentage of workers are in the manufacturing sector in Gujarat for females 2021-22?,Percentage distribution of workers (indicator_code=4),"state_code,gender_code,industry_section_code,year"
+5,What % of regular salaried employees in Tamil Nadu have no written job contract 2022-23?,Pct regular employees with employment condition (indicator_code=5),"state_code,employee_contract_code,year"
+6,AVERAGE SALARY OF URBAN FEMALES IN DELHI JAN-MAR 2023-24,Average wage/salary from regular employment (indicator_code=6),"state_code,gender_code,sector_code,year,quarter_code"
+7,daily casual labour wages for males in rural MP oct-dec 2022-23,Average wage from casual labour (indicator_code=7),"state_code,gender_code,sector_code,year,quarter_code"
+8,self employment earnings for persons in Odisha apr-jun 2020-21,Average gross earnings from self-employment (indicator_code=8),"state_code,gender_code,year,quarter_code"
+9,LFPR of post graduates in urban areas all india 2019-20 PS+SS,LFPR (indicator_code=1),"education_code,sector_code,state_code,year,weekly_status_code"
+10,unemployment among muslim youth (15-29) in West Bengal 2021-22,UR (indicator_code=3),"religion_code,age_code,state_code,year"
+11,compare WPR for OBC vs SC in rural Jharkhand 2018-19,WPR (indicator_code=2),"social_category_code,state_code,sector_code,year"
+12,percentage of workers doing casual labour in construction in UP 2023-24,Percentage distribution of workers (indicator_code=4),"state_code,broad_status_employment_code,industry_section_code,year"
+13,how many ppl r employed in india rn??,Ambiguous/tricky - informal language; maps to LFPR or WPR (indicator_code=1 or 2),state_code
+14,whats the inflation rate in bihar 2022-23?,Ambiguous/tricky - sounds like CPI not PLFS,tricky: not a PLFS indicator
+15,Show unemployment rate for Ladakh in 2015-16,Edge case - year 2015-16 does not exist in PLFS (starts 2017-18),"state_code,year"
