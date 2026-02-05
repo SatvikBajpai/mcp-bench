@@ -324,9 +324,19 @@ def main():
         "total_score", "judge_reasoning",
     ]
 
+    # Load existing judge results for merging (when --only is used with existing output)
+    existing_judge = {}
+    if only_queries and out_path.exists():
+        with open(out_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for erow in reader:
+                ekey = (erow.get("dataset", ""), erow.get("no", ""))
+                existing_judge[ekey] = erow
+        print(f"Loaded {len(existing_judge)} existing judge results for merging")
+
     # Load existing results if resuming
     existing = []
-    if args.start > 1 and out_path.exists():
+    if args.start > 1 and out_path.exists() and not only_queries:
         with open(out_path, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -437,6 +447,34 @@ def main():
 
         # Rate limit delay
         time.sleep(args.delay)
+
+    # Merge with existing judge results if --only was used
+    if existing_judge and results:
+        # Build map of newly judged results
+        new_judge = {}
+        for r in results:
+            key = (r.get("dataset", ""), r.get("no", ""))
+            new_judge[key] = r
+
+        # Merge: start with existing, replace with new where available
+        merged = []
+        for key, erow in existing_judge.items():
+            if key in new_judge:
+                merged.append(new_judge[key])
+            else:
+                merged.append(erow)
+
+        # Sort by dataset then query number
+        merged.sort(key=lambda r: (r.get("dataset", ""), int(r.get("no", 0))))
+
+        results = merged
+        print(f"\nMerged {len(new_judge)} re-judged queries into {len(existing_judge)} existing -> {len(results)} total")
+
+        # Save merged results
+        with open(out_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=out_fields)
+            writer.writeheader()
+            writer.writerows(results)
 
     # Final summary
     print(f"\nResults written to: {out_path}")

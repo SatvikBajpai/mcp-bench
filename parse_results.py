@@ -254,6 +254,9 @@ def main():
         print(f"No JSON files found in {work_dir}")
         return
 
+    # Sort files by modification time so newer files override older ones
+    json_files.sort(key=lambda p: p.stat().st_mtime)
+
     print(f"Parsing {len(json_files)} files:")
     for f in json_files:
         print(f"  {f.name}")
@@ -263,6 +266,16 @@ def main():
         rows = parse_json_file(jf)
         all_rows.extend(rows)
         print(f"  {jf.name}: {len(rows)} queries")
+
+    # Deduplicate: for same (dataset, no), keep the LAST occurrence (from latest file)
+    seen = {}
+    for i, row in enumerate(all_rows):
+        key = (row["dataset"], row["no"])
+        seen[key] = i  # overwrite with latest index
+    deduped_rows = [all_rows[i] for i in sorted(seen.values())]
+    if len(deduped_rows) < len(all_rows):
+        print(f"\n  Deduplicated: {len(all_rows)} -> {len(deduped_rows)} rows (removed {len(all_rows) - len(deduped_rows)} duplicates)")
+    all_rows = deduped_rows
 
     # Write CSV to work_dir
     out_path = work_dir / "benchmark_results.csv"
