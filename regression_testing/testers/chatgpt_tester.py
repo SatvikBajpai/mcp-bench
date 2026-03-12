@@ -54,8 +54,15 @@ def read_server_log(log_path: str) -> str:
     if not log_path:
         return ""
     try:
-        with open(log_path, "r") as f:
-            return f.read()
+        raw = Path(log_path).read_bytes()
+        # Detect UTF-16 (BOM or null bytes every other byte)
+        if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
+            content = raw.decode("utf-16")
+        elif len(raw) > 2 and raw[1] == 0:
+            content = raw.decode("utf-16-le")
+        else:
+            content = raw.decode("utf-8", errors="replace")
+        return content.replace("\x00", "")
     except FileNotFoundError:
         return ""
 
