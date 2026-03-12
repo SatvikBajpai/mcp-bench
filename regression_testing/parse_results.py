@@ -228,13 +228,17 @@ def parse_json_file(json_path: Path) -> list[dict]:
 
 def main():
     import argparse
+    from datetime import datetime
     parser = argparse.ArgumentParser(description="Parse MCP tester JSON results into CSV")
     parser.add_argument("--dir", type=str, default=None,
-                        help="Directory containing JSON files and for output CSV (default: responses/)")
+                        help="Directory containing JSON files (default: responses/)")
+    parser.add_argument("--run-name", type=str, default=None,
+                        help="Name for this run's output folder (default: today's date YYYY-MM-DD). "
+                             "Output goes to responses/<run-name>/benchmark_results.csv")
     parser.add_argument("files", nargs="*", help="JSON files to parse (optional, defaults to all in --dir)")
     args = parser.parse_args()
 
-    # Determine working directory
+    # Determine working directory (where JSON files live)
     work_dir = Path(args.dir) if args.dir else RESPONSES_DIR
 
     # Find JSON files to parse
@@ -277,8 +281,11 @@ def main():
         print(f"\n  Deduplicated: {len(all_rows)} -> {len(deduped_rows)} rows (removed {len(all_rows) - len(deduped_rows)} duplicates)")
     all_rows = deduped_rows
 
-    # Write CSV to work_dir
-    out_path = work_dir / "benchmark_results.csv"
+    # Write CSV to dated subfolder
+    run_name = args.run_name or datetime.now().strftime("%Y-%m-%d")
+    out_dir = work_dir / run_name
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "benchmark_results.csv"
     fieldnames = [
         "platform", "mode", "dataset", "no", "query", "indicator_tested", "filters_tested",
         "status", "dataset_routed_to", "correct_routing",
@@ -295,7 +302,10 @@ def main():
         writer.writerows(all_rows)
 
     print(f"\nCSV written to: {out_path}")
+    print(f"Run folder:     {out_dir}")
     print(f"Total rows: {len(all_rows)}")
+    print(f"\nTo judge this run:")
+    print(f"  python judge.py --csv \"{out_path}\"")
 
     # Print quick summary
     print("\n--- Summary ---")

@@ -458,7 +458,17 @@ def main():
                 only_queries.add((parts[0].strip().upper(), int(parts[1].strip())))
 
     work_dir = Path(args.dir) if args.dir else RESPONSES_DIR
-    csv_path = Path(args.csv) if args.csv else work_dir / "benchmark_results.csv"
+
+    if args.csv:
+        csv_path = Path(args.csv)
+    else:
+        # Auto-detect latest dated subfolder containing benchmark_results.csv
+        dated_csvs = sorted(work_dir.glob("*/benchmark_results.csv"))
+        if dated_csvs:
+            csv_path = dated_csvs[-1]  # latest alphabetically = latest date
+            print(f"Auto-detected run: {csv_path.parent.name}")
+        else:
+            csv_path = work_dir / "benchmark_results.csv"
 
     if not csv_path.exists():
         print(f"CSV not found: {csv_path}")
@@ -485,7 +495,7 @@ def main():
     print(f"Judge: rule-based (free, no API calls)")
     print()
 
-    out_path = work_dir / "judge_results.csv"
+    out_path = csv_path.parent / "judge_results.csv"
     out_fields = list(rows[0].keys()) + [
         "score_routing", "score_ordering",
         "score_filter_accuracy", "filter_notes",
