@@ -1,0 +1,16 @@
+no,query,indicators_tested,expected_outcome
+1,Compare growth rates for Agriculture sector across 2015-2020,"1,5,21,22",success
+2,Analyze the relationship between household consumption and savings from 2018 to 2022,"10,20",success
+3,Calculate net exports by comparing exports and imports for 2019-20 to 2023-24,"14,15",success
+4,Compare output across Manufacturing and Construction industries using Production approach for 2020-21,1,success
+5,Analyze national income composition by fetching taxes and total product for multiple revision estimates in 2022-23,"2,5",success
+6,Calculate total investment by aggregating fixed capital formation and stock changes for institutional sectors in 2021-22,"9,12",success
+7,Compare consumption patterns between households and government across 2017-2023,"10,11",success
+8,"Analyze output trend across Agriculture, Manufacturing, and Financial Services industries for 2019-20 using industry and subindustry breakdowns",1,success
+9,"Calculate national income components by fetching income, product, and transfers for 2020-21","5,17,18",partial_data
+10,Compare capital formation across Public and Private sectors using institutional breakdown for 2023-24,9,success
+11,"Analyze fiscal indicators by comparing taxes, subsidies, and government spending for 2022-23","2,3,4,11",partial_data
+12,Calculate savings-investment gap by comparing savings and capital formation for household sector 2018-22,"9,20",success
+13,Compare national product estimates using both Expenditure and Production approaches for multiple industries in 2021-22,5,success
+14,Analyze output and product growth rates for non-existent quarterly data in Back series for 2010-11,"21,22",no_data
+15,Compare capital consumption across institutional sectors with output by mismatched industry filters for 2019-20,"1,6",error

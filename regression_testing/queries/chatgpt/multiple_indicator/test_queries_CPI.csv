@@ -1,0 +1,16 @@
+no,query,indicators_tested,expected_outcome
+1,Compare food and beverages versus fuel and light inflation in Bihar for 2023,Food and Beverages|Fuel and Light,success
+2,Which is higher in urban Maharashtra: housing or transport and communication price index in December 2024?,Housing|Transport and Communication,success
+3,"Give me general index, cereals, and vegetables indices for rural Tamil Nadu in June 2022",General|Cereals and Products|Vegetables,success
+4,What's the ratio of clothing to footwear price index in Delhi for 2023?,Clothing|Footwear,success
+5,Compare food and beverages versus pan and tobacco for all India in 2020,"Food and Beverages|Pan, Tobacco and Intoxicants",success
+6,What is the difference between health and education price index in urban Karnataka in January 2021?,Health|Education,success
+7,"Show me meat and fish, eggs, milk products, and oils for Gujarat in 2024",Meat and Fish|Egg|Milk and Products|Oils and Fats,success
+8,How did fuel and light and transport and communication change between 2020 and 2023 in Rajasthan?,Fuel and Light|Transport and Communication,success
+9,"Give me all food subgroups: cereals, pulses, vegetables, fruits, and spices for rural West Bengal in 2022",Cereals and Products|Pulses and Products|Vegetables|Fruits|Spices,success
+10,"Compare general index, consumer food price, and miscellaneous in Uttar Pradesh for April 2023",General|Consumer Food Price|Miscellaneous,success
+11,What's the difference between recreation and personal care price indices in urban Goa for 2024?,Recreation and Amusement|Personal Care and Effects,success
+12,"Show housing, fuel and light, and household goods for Telangana in March 2023",Housing|Fuel and Light|Household Goods and Services,success
+13,Compare clothing and footwear versus housing for Haryana in 2019 for both rural and urban sectors,Clothing and Footwear|Housing,partial_data
+14,Give me sugar and confectionery index for Puducherry in 2011 and prepared meals for 2025,"Sugar and Confectionery|Prepared Meals, Snacks, Sweets etc.",partial_data
+15,What's the price index for vegetables in Bihar and transport in Lakshadweep with different months?,Vegetables|Transport and Communication,no_data

@@ -1,0 +1,16 @@
+no,query,indicators_tested,expected_outcome
+1,Compare the Total Number of Persons Engaged and Total Number of Workers across all states in 2022-23 for the textile industry,31|32,success
+2,Analyze the relationship between Fixed Capital and Gross Value Added in Maharashtra for pharmaceutical manufacturing from 2018-19 to 2022-23,3|19,success
+3,Calculate the capital productivity by comparing Invested Capital and Total Output for the automobile sector in Tamil Nadu for 2021-22,6|15,success
+4,"Compare Working Capital, Physical Working Capital, and Invested Capital trends for food processing industry in Gujarat from 2019-20 to 2023-24",4|5|6,success
+5,"Assess labor intensity by analyzing Total Number of Workers, No. of Directly Employed Workers, and No. of Workers employed Through Contractors in garment manufacturing across All India for 2022-23",32|33|37,success
+6,"Evaluate production efficiency by comparing Total Output, Total Inputs, and Gross Value Added for chemical industry in West Bengal for 2020-21",15|18|19,success
+7,"Examine the wage structure comparing Wages and Salaries, Wages and Salary of Workers, and Bonus to All Staff in steel manufacturing in Odisha for 2022-23",45|46|49,success
+8,"Analyze capital formation by comparing Net Fixed Capital Formation, Gross Fixed Capital Formation, and Gross Capital Formation for machinery manufacturing in All India from 2020-21 to 2022-23",22|23|28,success
+9,"Compare energy consumption patterns using Quantity of Coal Consumed, Quantity of Electricity Purchased and Consumed, and Value of Petroleum Products Consumed for cement industry in Rajasthan for 2021-22",51|53|55,success
+10,"Assess gender diversity by analyzing Total Number of Workers, No. of Directly Employed Male Workers, and No. of Directly Employed Female Workers in electronics manufacturing in Karnataka for 2022-23",32|34|35,success
+11,"Evaluate financial performance by comparing Gross Value Added, Net Value Added, Net Income, and Net Profit for pharmaceutical industry in All India for 2021-22",19|21|29|30,success
+12,"Analyze comprehensive labor metrics by examining Total Number of Persons Engaged, No. of Employees Other Than Workers, Total Mandays Employed, Wages and Salaries Including Employer's Contribution, and Wages and Salaries Including Bonus for IT hardware manufacturing in Tamil Nadu for 2022-23",31|38|42|43|44,success
+13,"Compare Number of Factories, Factories in Operation, and Outstanding Loan for toy manufacturing in Delhi for year 2025-26",1|2|9,no_data
+14,Analyze the correlation between Rent Paid for Fixed Assets and Interest Received across different NIC types for the same query parameters in textiles for 2022-23,8|12,partial_data
+15,Calculate worker productivity by comparing No. of Directly Employed Children Workers with Total Output and Gross Value Added in food processing in All India for 2022-23,15|19|36,error
