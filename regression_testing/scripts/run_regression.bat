@@ -17,7 +17,7 @@ REM ============================================================
 
 cd /d "%~dp0.."
 
-set LOG=C:\temp\mospi_telemetry.log
+set LOG=C:\temp\mospi_server.log
 set CSV=queries\regression_test_queries.csv
 set DELAY=30
 set START=%2
