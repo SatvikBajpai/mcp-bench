@@ -3,14 +3,15 @@
 Rule-based judge for MoSPI MCP benchmark results.
 
 FREE alternative to the LLM-as-judge approach.
-Uses deterministic heuristics + ground truth to score 6 dimensions:
+Uses deterministic heuristics + ground truth to score 7 dimensions:
 
-  1. Routing          — did LLM pick the correct dataset?         (auto)
-  2. Ordering         — were tools called in 1→2→3→4 order?       (auto)
-  3. Filter Accuracy  — did get_data use numeric codes?            (heuristic)
-  4. Data Retrieval   — did any get_data call return real data?    (auto)
-  5. Response Quality — do numbers in the response match output?   (heuristic)
-  6. Ground Truth     — does API output contain expected value(s)? (deterministic)
+  1. Routing             — did LLM pick the correct dataset?            (auto)
+  2. Ordering            — were tools called in 1→2→3→4 order?          (auto)
+  3. Filter Accuracy     — did get_data use numeric codes?               (heuristic)
+  4. Data Retrieval      — did any get_data call return real data?       (auto)
+  5. Response Quality    — do numbers in the response match output?      (heuristic)
+  6. Ground Truth        — does API output contain expected value(s)?    (deterministic)
+  7. API Response Valid. — do returned data rows match query entities?   (heuristic)
 
 Usage:
     python judge.py
@@ -214,6 +215,155 @@ def score_response_quality(row: dict) -> tuple[int, str]:
     return 1, "Response appears consistent with API output."
 
 
+# ── Dimension 7: API Response Validation ─────────────────────────────────────
+
+_INDIAN_STATES = {
+    "andhra pradesh", "arunachal pradesh", "assam", "bihar", "chhattisgarh",
+    "goa", "gujarat", "haryana", "himachal pradesh", "jharkhand",
+    "karnataka", "kerala", "madhya pradesh", "maharashtra", "manipur",
+    "meghalaya", "mizoram", "nagaland", "odisha", "punjab", "rajasthan",
+    "sikkim", "tamil nadu", "telangana", "tripura", "uttar pradesh",
+    "uttarakhand", "west bengal",
+    "andaman and nicobar", "chandigarh", "dadra and nagar haveli",
+    "daman and diu", "delhi", "jammu and kashmir", "ladakh", "lakshadweep",
+    "puducherry", "all india", "india", "national",
+}
+
+_CPI_GROUPS = [
+    "food and beverages", "pan tobacco and intoxicants", "clothing and footwear",
+    "housing", "fuel and light", "miscellaneous", "health",
+    "transport and communication", "recreation and amusement",
+    "education", "personal care", "cereals and products",
+    "vegetables", "pulses", "milk", "oils and fats", "sugar",
+]
+
+_YEAR_ENTITY_RE = re.compile(r'\b(20\d{2}(?:-\d{2,4})?|19\d{2})\b')
+_SECTOR_WORDS   = {"rural", "urban", "combined"}
+_GENDER_MAP     = {"male": "male", "men": "male", "female": "female",
+                   "women": "female", "woman": "female", "man": "male"}
+_MONTHS         = {
+    "january": "january", "february": "february", "march": "march",
+    "april": "april", "may": "may", "june": "june", "july": "july",
+    "august": "august", "september": "september", "october": "october",
+    "november": "november", "december": "december",
+    "jan": "january", "feb": "february", "mar": "march", "apr": "april",
+    "jun": "june", "jul": "july", "aug": "august", "sep": "september",
+    "oct": "october", "nov": "november", "dec": "december",
+}
+
+_FIELD_CANDIDATES = {
+    "year":   ["year", "financial_year", "period", "Year"],
+    "sector": ["sector", "Sector", "level", "Level"],
+    "gender": ["gender", "Gender", "sex"],
+    "state":  ["state", "State", "state_name"],
+    "month":  ["month", "Month", "month_name"],
+    "group":  ["group", "Group", "commodity_group", "description"],
+}
+
+
+def _extract_entities(query: str) -> dict:
+    """Extract year, sector, gender, state, month, group from a natural language query."""
+    q = query.lower().strip()
+    entities = {}
+
+    years = _YEAR_ENTITY_RE.findall(q)
+    if years:
+        entities["year"] = years
+
+    sectors = [s for s in _SECTOR_WORDS if s in q]
+    if sectors:
+        entities["sector"] = sectors
+
+    genders = set(canonical for word, canonical in _GENDER_MAP.items()
+                  if re.search(r'\b' + word + r'\b', q))
+    if genders:
+        entities["gender"] = list(genders)
+
+    # Longest match first to avoid "delhi" matching before "new delhi" etc.
+    states = [s for s in sorted(_INDIAN_STATES, key=len, reverse=True) if s in q]
+    if states:
+        entities["state"] = states[:2]
+
+    months = set(_MONTHS[m] for m in _MONTHS if re.search(r'\b' + m + r'\b', q))
+    if months:
+        entities["month"] = list(months)
+
+    groups = [g for g in _CPI_GROUPS if g in q]
+    if groups:
+        entities["group"] = groups
+
+    return entities
+
+
+def _parse_data_rows(data_output: str) -> list:
+    if not data_output:
+        return []
+    try:
+        parsed = json.loads(data_output)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        rows = parsed.get("data", [])
+        return rows if isinstance(rows, list) else []
+    return []
+
+
+def _row_field_value(row: dict, entity_type: str):
+    """Return the lowercased string value of the best matching field, or None."""
+    for field in _FIELD_CANDIDATES.get(entity_type, []):
+        for k, v in row.items():
+            if k.lower() == field.lower():
+                return str(v).lower().strip()
+    return None
+
+
+def score_api_validation(row: dict) -> tuple:
+    """
+    Dimension 7: Do the API data rows match the entities in the user query?
+    Returns (score, notes): 1=match, 0=mismatch, -1=N/A.
+    """
+    if row.get("got_data", "").upper() != "YES":
+        return -1, "No data retrieved — nothing to validate."
+
+    data_output = row.get("4_data_output", "").strip()
+    if not data_output:
+        return -1, "got_data=YES but 4_data_output is empty."
+
+    entities = _extract_entities(row.get("query", ""))
+    if not entities:
+        return -1, "No matchable entities found in query."
+
+    data_rows = _parse_data_rows(data_output)
+    if not data_rows:
+        return -1, "Could not parse data rows from 4_data_output."
+
+    sample = data_rows[:5]
+    mismatches = []
+
+    for entity_type, entity_values in entities.items():
+        row_values = [_row_field_value(r, entity_type) for r in sample if isinstance(r, dict)]
+        row_values = [v for v in row_values if v is not None]
+
+        if not row_values:
+            continue  # field not in this dataset's schema — skip, don't penalise
+
+        matched = any(
+            ev in rv or rv in ev
+            for rv in row_values
+            for ev in entity_values
+        )
+        if not matched:
+            mismatches.append(
+                f"{entity_type}: expected {entity_values!r}, got {list(set(row_values))!r}"
+            )
+
+    if mismatches:
+        return 0, "Data rows don't match query: " + "; ".join(mismatches)
+    return 1, f"Data rows match query entities ({list(entities.keys())})."
+
+
 # ── Dimension 6: Ground Truth Validation ─────────────────────────────────────
 
 def load_ground_truth(gt_csv_path: Path) -> dict[int, str]:
@@ -342,6 +492,7 @@ def main():
         "score_data_retrieval", "data_notes",
         "score_response_quality", "response_notes",
         "score_ground_truth", "ground_truth_notes",
+        "score_api_validation", "api_validation_notes",
         "total_score",
     ]
 
@@ -368,16 +519,20 @@ def main():
         gt_value = ground_truth.get(int(qno), "") if qno else ""
         score_gt, gt_notes = score_ground_truth(row, gt_value)
 
+        score_api_val, api_val_notes = score_api_validation(row)
+
         raw_scores = [score_routing, score_ordering, score_filter,
-                      score_data, score_response, score_gt]
+                      score_data, score_response, score_gt, score_api_val]
         total = sum(s for s in raw_scores if isinstance(s, int) and s > 0)
 
-        display_filter = "N/A" if score_filter == -1 else score_filter
-        display_gt     = "N/A" if score_gt     == -1 else score_gt
+        display_filter  = "N/A" if score_filter  == -1 else score_filter
+        display_gt      = "N/A" if score_gt      == -1 else score_gt
+        display_api_val = "N/A" if score_api_val == -1 else score_api_val
 
         print(f"[{row_num}/{len(rows)}] {ds} Q{qno}: {qstr}...")
         print(f"    Routing={score_routing} Order={score_ordering} Filter={display_filter} "
-              f"Data={score_data} Response={score_response} GT={display_gt} Total={total}/6")
+              f"Data={score_data} Response={score_response} GT={display_gt} "
+              f"APIVal={display_api_val} Total={total}/7")
         if filter_notes:
             print(f"    [Filter]   {filter_notes}")
         if data_notes:
@@ -386,6 +541,8 @@ def main():
             print(f"    [Response] {response_notes}")
         if gt_notes and score_gt != -1:
             print(f"    [GT]       {gt_notes}")
+        if api_val_notes and score_api_val != -1:
+            print(f"    [APIVal]   {api_val_notes}")
         print()
 
         out_row = dict(row)
@@ -400,6 +557,8 @@ def main():
             "response_notes":         response_notes,
             "score_ground_truth":     display_gt,
             "ground_truth_notes":     gt_notes,
+            "score_api_validation":   display_api_val,
+            "api_validation_notes":   api_val_notes,
             "total_score":            total,
         })
         results.append(out_row)
@@ -433,11 +592,11 @@ def main():
 
     header = (f"{'Platform':<10} {'Mode':<6} {'Dataset':<8} "
               f"{'Routing':>7} {'Order':>7} {'Filter':>7} "
-              f"{'Data':>7} {'Resp':>7} {'GT':>7} {'Avg':>6}")
+              f"{'Data':>7} {'Resp':>7} {'GT':>7} {'APIVal':>7} {'Avg':>6}")
     print(header)
     print("-" * len(header))
 
-    all_scores = {k: [] for k in ["routing", "ordering", "filter", "data", "response", "gt"]}
+    all_scores = {k: [] for k in ["routing", "ordering", "filter", "data", "response", "gt", "apival"]}
 
     for plat in platforms:
         for m in modes:
@@ -453,24 +612,25 @@ def main():
                 data     = [to_num(r["score_data_retrieval"]) for r in subset]
                 resp     = [to_num(r["score_response_quality"]) for r in subset]
                 gt       = [to_num(r["score_ground_truth"]) for r in subset]
+                apival   = [to_num(r["score_api_validation"]) for r in subset]
 
-                for k, v in zip(["routing", "ordering", "filter", "data", "response", "gt"],
-                                 [routing, ordering, filt, data, resp, gt]):
+                for k, v in zip(["routing", "ordering", "filter", "data", "response", "gt", "apival"],
+                                 [routing, ordering, filt, data, resp, gt, apival]):
                     all_scores[k].extend(v)
 
                 avgs = [safe_avg(routing), safe_avg(ordering), safe_avg(filt),
-                        safe_avg(data), safe_avg(resp), safe_avg(gt)]
+                        safe_avg(data), safe_avg(resp), safe_avg(gt), safe_avg(apival)]
                 overall = safe_avg(avgs)
                 print(f"{plat:<10} {m:<6} {ds:<8} "
                       f"{avgs[0]:>6.0%} {avgs[1]:>6.0%} {avgs[2]:>6.0%} "
-                      f"{avgs[3]:>6.0%} {avgs[4]:>6.0%} {avgs[5]:>6.0%} {overall:>5.0%}")
+                      f"{avgs[3]:>6.0%} {avgs[4]:>6.0%} {avgs[5]:>6.0%} {avgs[6]:>6.0%} {overall:>5.0%}")
 
     print("-" * len(header))
-    avgs = [safe_avg(all_scores[k]) for k in ["routing", "ordering", "filter", "data", "response", "gt"]]
+    avgs = [safe_avg(all_scores[k]) for k in ["routing", "ordering", "filter", "data", "response", "gt", "apival"]]
     overall = safe_avg(avgs)
     print(f"{'OVERALL':<10} {'':<6} {'':<8} "
           f"{avgs[0]:>6.0%} {avgs[1]:>6.0%} {avgs[2]:>6.0%} "
-          f"{avgs[3]:>6.0%} {avgs[4]:>6.0%} {avgs[5]:>6.0%} {overall:>5.0%}")
+          f"{avgs[3]:>6.0%} {avgs[4]:>6.0%} {avgs[5]:>6.0%} {avgs[6]:>6.0%} {overall:>5.0%}")
 
 
 if __name__ == "__main__":
