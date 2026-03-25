@@ -43,22 +43,37 @@ def auto_score_routing(row: dict) -> int:
 
 
 def auto_score_ordering(row: dict) -> int:
+    """Check if tools were called in a valid forward progression.
+
+    Valid if the longest forward (non-decreasing) subsequence of step numbers
+    ends at step 4 (data retrieval). This handles:
+      - Full: 1->2->3->4
+      - Skip step 1: 2->3->4
+      - Skip step 2: 3->4
+      - Skip step 3: 2->4
+      - Retries (2->3->2->4) - the forward subsequence 2->3->4 is valid
+    """
     trace = row.get("tool_trace", "")
     if not trace:
         return 0
     tool_nums = re.findall(r'(\d)_', trace)
     if not tool_nums:
         return 0
-    deduped = [tool_nums[0]]
+
+    # Extract longest forward (non-decreasing) subsequence
+    forward = [tool_nums[0]]
     for t in tool_nums[1:]:
-        if t != deduped[-1]:
-            deduped.append(t)
-    expected = ['1', '2', '3', '4']
-    idx = 0
-    for t in deduped:
-        if idx < len(expected) and t == expected[idx]:
-            idx += 1
-    return 1 if idx == 4 else 0
+        if t >= forward[-1]:
+            if t != forward[-1]:  # skip consecutive duplicates
+                forward.append(t)
+        # If t < forward[-1], it's a retry - skip it
+
+    # Must reach step 4 and have at least 2 distinct steps
+    if '4' in forward and len(forward) >= 2:
+        return 1
+
+    # Single step or never reached step 4
+    return 0
 
 
 def _extract_all_calls(row: dict) -> dict:
@@ -109,7 +124,22 @@ def score_filter_accuracy(row: dict) -> tuple[int, str]:
         return -1, "Step 3 (get_metadata) was never successfully reached."
 
     if not get_data_calls:
-        return 0, "No get_data calls found."
+        return -1, "No get_data calls found (cannot assess filter accuracy)."
+
+    # Check if we actually have filter args (output-only telemetry only gives dataset)
+    has_filter_args = False
+    for call in get_data_calls:
+        args = call.get("args", {})
+        filters = args.get("filters", args) if isinstance(args, dict) else {}
+        if isinstance(filters, dict):
+            non_meta_keys = {k for k in filters.keys() if k not in ("dataset", "indicator_code")}
+            if non_meta_keys:
+                has_filter_args = True
+                break
+
+    if not has_filter_args:
+        # Output-only telemetry - can't assess filter accuracy from outputs alone
+        return -1, "Filter args not captured in telemetry (output-only mode)."
 
     name_like = []
     for call in get_data_calls:
@@ -588,7 +618,7 @@ def main():
 
     def safe_avg(values):
         nums = [v for v in values if isinstance(v, (int, float))]
-        return sum(nums) / len(nums) if nums else 0
+        return sum(nums) / len(nums) if nums else None
 
     def to_num(val):
         try:
@@ -630,17 +660,27 @@ def main():
 
                 avgs = [safe_avg(routing), safe_avg(ordering), safe_avg(filt),
                         safe_avg(data), safe_avg(resp), safe_avg(gt), safe_avg(apival)]
-                overall = safe_avg(avgs)
+                valid_avgs = [a for a in avgs if a is not None]
+                overall = sum(valid_avgs) / len(valid_avgs) if valid_avgs else None
+
+                def fmt(v):
+                    return f"{v:>6.0%}" if v is not None else f"{'N/A':>6}"
+
                 print(f"{plat:<10} {m:<6} {ds:<8} "
-                      f"{avgs[0]:>6.0%} {avgs[1]:>6.0%} {avgs[2]:>6.0%} "
-                      f"{avgs[3]:>6.0%} {avgs[4]:>6.0%} {avgs[5]:>6.0%} {avgs[6]:>6.0%} {overall:>5.0%}")
+                      f"{fmt(avgs[0])} {fmt(avgs[1])} {fmt(avgs[2])} "
+                      f"{fmt(avgs[3])} {fmt(avgs[4])} {fmt(avgs[5])} {fmt(avgs[6])} {fmt(overall)}")
 
     print("-" * len(header))
     avgs = [safe_avg(all_scores[k]) for k in ["routing", "ordering", "filter", "data", "response", "gt", "apival"]]
-    overall = safe_avg(avgs)
+    valid_avgs = [a for a in avgs if a is not None]
+    overall = sum(valid_avgs) / len(valid_avgs) if valid_avgs else None
+
+    def fmt(v):
+        return f"{v:>6.0%}" if v is not None else f"{'N/A':>6}"
+
     print(f"{'OVERALL':<10} {'':<6} {'':<8} "
-          f"{avgs[0]:>6.0%} {avgs[1]:>6.0%} {avgs[2]:>6.0%} "
-          f"{avgs[3]:>6.0%} {avgs[4]:>6.0%} {avgs[5]:>6.0%} {avgs[6]:>6.0%} {overall:>5.0%}")
+          f"{fmt(avgs[0])} {fmt(avgs[1])} {fmt(avgs[2])} "
+          f"{fmt(avgs[3])} {fmt(avgs[4])} {fmt(avgs[5])} {fmt(avgs[6])} {fmt(overall)}")
 
 
 if __name__ == "__main__":

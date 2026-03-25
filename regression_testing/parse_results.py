@@ -19,61 +19,300 @@ from pathlib import Path
 RESPONSES_DIR = Path(__file__).parent / "responses"
 
 
+def _infer_tool_from_output(output_raw: str) -> str:
+    """Infer which MCP tool produced this output based on content.
+
+    The server embeds navigation hints in each response:
+      - next_step containing "get_indicators" -> this is step 1 output
+      - next_step containing "get_metadata"   -> this is step 2 output
+      - api_params present (or next_step "get_data") -> this is step 3 output
+      - meta_data present (no next_step)      -> this is step 4 output
+
+    Falls back to content-structure heuristics when these signals are absent.
+    """
+    # Scan both the beginning and end of the output (structural markers like
+    # next_step and api_params often appear at the end of large JSON outputs)
+    scan = output_raw[:3000] + output_raw[-3000:] if len(output_raw) > 6000 else output_raw
+
+    # ---- Primary signals: next_step and structural markers ----
+
+    # Step 1: dataset catalog
+    if '"total_datasets"' in scan[:500] or '"datasets"' in scan[:100]:
+        return "1_know_about_mospi_api"
+
+    # next_step is the most reliable discriminator
+    if '"next_step"' in scan:
+        ns_match = re.search(r'"next_step"\s*:\s*"([^"]*)"', scan)
+        if ns_match:
+            ns = ns_match.group(1).lower()
+            if "get_indicators" in ns:
+                return "1_know_about_mospi_api"
+            if "get_metadata" in ns or "metadata" in ns:
+                return "2_get_indicators"
+            if "get_data" in ns:
+                return "3_get_metadata"
+
+    # api_params is ALWAYS present in step 3, NEVER in others
+    if '"api_params"' in scan:
+        return "3_get_metadata"
+
+    # meta_data is ALWAYS present in step 4 data responses
+    if '"meta_data"' in scan:
+        return "4_get_data"
+
+    # ---- PLFS-style specific markers ----
+    if '"indicators_by_frequency"' in scan[:500]:
+        return "2_get_indicators"
+    if '"filter_values"' in scan[:500]:
+        return "3_get_metadata"
+
+    # ---- Fallback: content structure heuristics ----
+    if '"data"' in scan[:100]:
+        try:
+            parsed = json.loads(output_raw)
+            if isinstance(parsed, dict):
+                data = parsed.get("data")
+                if isinstance(data, dict):
+                    # Dict with nested indicator_code lists -> step 2
+                    for val in data.values():
+                        if isinstance(val, list) and val and isinstance(val[0], dict):
+                            if "indicator_code" in val[0]:
+                                return "2_get_indicators"
+                    # Dict with filter-value arrays -> step 3
+                    return "3_get_metadata"
+                if isinstance(data, list) and data:
+                    first = data[0] if isinstance(data[0], dict) else {}
+                    if "indicator_code" in first and "value" not in first:
+                        return "2_get_indicators"
+                    # Items with nested arrays -> step 3 (list-format metadata)
+                    if first and sum(1 for v in first.values() if isinstance(v, list)) >= 2:
+                        return "3_get_metadata"
+                    return "4_get_data"
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Raw text fallbacks for truncated JSON
+        if '"indicator_code"' in scan[:500] and '"value"' not in scan[:500]:
+            return "2_get_indicators"
+        return "4_get_data"
+
+    return "unknown"
+
+
+_KNOWN_DATASETS = {
+    "PLFS", "CPI", "IIP", "ASI", "NAS", "WPI", "ENERGY", "AISHE",
+    "CPIALRL", "HCES", "ASUSE", "GENDER", "NFHS", "NSS77", "NSS78",
+    "RBI", "TUS", "EC", "ENVSTATS",
+}
+
+# Keywords in user_query or _note that map to datasets (longer/more specific first)
+_DATASET_KEYWORDS = [
+    # CPIALRL
+    ("agricultural labourers", "CPIALRL"), ("rural labourers", "CPIALRL"),
+    ("cpialrl", "CPIALRL"), ("cpi-al", "CPIALRL"), ("cpi(al)", "CPIALRL"),
+    ("cpi for al", "CPIALRL"), ("cpi al ", "CPIALRL"),
+    # EC
+    ("economic census", "EC"), ("ec6", "EC"), ("ec7", "EC"),
+    ("number of establishments", "EC"), ("number of workers", "EC"),
+    # TUS
+    ("time use", "TUS"), ("time-use", "TUS"), ("minutes per day", "TUS"),
+    ("time spent", "TUS"), ("paid activities", "TUS"), ("unpaid activities", "TUS"),
+    # NSS
+    ("nss 77", "NSS77"), ("nss-77", "NSS77"), ("nss77", "NSS77"), ("77th round", "NSS77"),
+    ("nss 78", "NSS78"), ("nss-78", "NSS78"), ("nss78", "NSS78"), ("78th round", "NSS78"),
+    ("drinking water", "NSS78"), ("sanitation", "NSS78"),
+    # HCES
+    ("household consumption", "HCES"), ("hces", "HCES"), (" mpce ", "HCES"),
+    ("monthly per capita expenditure", "HCES"), ("consumption expenditure", "HCES"),
+    ("expenditure class", "HCES"), ("mpce by", "HCES"),
+    # ASUSE
+    ("annual survey of unincorporated", "ASUSE"), ("asuse", "ASUSE"),
+    ("unincorporated", "ASUSE"), ("unorganised", "ASUSE"), ("own account enterprise", "ASUSE"),
+    # GENDER
+    ("gender statistics", "GENDER"), ("gender stat", "GENDER"),
+    ("sex ratio", "GENDER"), ("female literacy", "GENDER"),
+    ("infant mortality rate", "GENDER"), (" imr ", "GENDER"),
+    ("maternal mortality", "GENDER"), (" mmr ", "GENDER"),
+    ("wpr ", "GENDER"), ("worker population ratio", "GENDER"),
+    # NFHS
+    ("family health", "NFHS"), ("nfhs", "NFHS"),
+    ("stunting", "NFHS"), ("wasting", "NFHS"), ("underweight", "NFHS"),
+    ("immunization", "NFHS"), ("immunisation", "NFHS"),
+    ("teenage pregnancy", "NFHS"), ("anemia", "NFHS"), ("anaemia", "NFHS"),
+    ("institutional delivery", "NFHS"), ("antenatal", "NFHS"),
+    ("contraceptive", "NFHS"), ("breastfeeding", "NFHS"),
+    # ENVSTATS
+    ("environment statistics", "ENVSTATS"), ("envstats", "ENVSTATS"),
+    ("temperature", "ENVSTATS"), ("rainfall", "ENVSTATS"),
+    ("forest cover", "ENVSTATS"), ("emission", "ENVSTATS"),
+    ("air quality", "ENVSTATS"), ("solid waste", "ENVSTATS"),
+    # AISHE
+    ("higher education", "AISHE"), ("aishe", "AISHE"),
+    ("universities", "AISHE"), ("colleges", "AISHE"),
+    ("gross enrolment ratio", "AISHE"), (" ger ", "AISHE"),
+    # ENERGY
+    ("energy balance", "ENERGY"), ("energy consumption", "ENERGY"),
+    ("energy statistics", "ENERGY"), (" ktoe", "ENERGY"), ("petajoule", "ENERGY"),
+    # WPI
+    ("wholesale price", "WPI"), (" wpi ", "WPI"),
+    # IIP
+    ("industrial production", "IIP"), (" iip ", "IIP"),
+    # ASI
+    ("annual survey of industries", "ASI"), (" asi ", "ASI"),
+    ("factory", "ASI"), ("factories", "ASI"),
+    # NAS
+    ("national accounts", "NAS"), (" gdp ", "NAS"), ("gross domestic product", "NAS"),
+    ("gross value added", "NAS"), (" gva ", "NAS"), (" nas ", "NAS"),
+    ("capital formation", "NAS"), ("final consumption", "NAS"),
+    # RBI
+    ("reserve bank", "RBI"), (" rbi ", "RBI"),
+    ("bank credit", "RBI"), ("bank deposits", "RBI"), ("money supply", "RBI"),
+    ("repo rate", "RBI"), ("interest rate", "RBI"),
+    ("scheduled commercial bank", "RBI"), ("financial inclusion", "RBI"),
+    # CPI
+    ("consumer price index", "CPI"), (" cpi ", "CPI"),
+    ("inflation", "CPI"),
+    # PLFS
+    ("periodic labour", "PLFS"), ("plfs", "PLFS"), ("labour force survey", "PLFS"),
+    ("unemployment rate", "PLFS"),
+]
+
+
+def _extract_args_from_output(tool: str, output_raw: str) -> dict:
+    """Try to extract dataset and key args from the output content."""
+    args = {}
+
+    # Step 1 lists ALL datasets - don't try to extract a specific one
+    if tool == "1_know_about_mospi_api":
+        return args
+
+    try:
+        parsed = json.loads(output_raw)
+        if isinstance(parsed, dict):
+            if "dataset" in parsed:
+                args["dataset"] = parsed["dataset"]
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    if "dataset" not in args:
+        # Try regex for "dataset": "XXX"
+        m = re.search(r'"dataset"\s*:\s*"([^"]+)"', output_raw[:1000])
+        if m:
+            args["dataset"] = m.group(1)
+
+    if "dataset" not in args:
+        # Check user_query and _note fields for dataset keywords
+        # These are specific to the actual query, not a catalog listing
+        uq_match = re.search(r'"user_query"\s*:\s*"([^"]*)"', output_raw[:5000])
+        note_match = re.search(r'"_note"\s*:\s*"([^"]*)"', output_raw[:5000])
+        search_text = ""
+        if uq_match:
+            search_text += " " + uq_match.group(1)
+        if note_match:
+            search_text += " " + note_match.group(1)
+        if search_text:
+            search_lower = f" {search_text.lower()} "
+            for keyword, ds in _DATASET_KEYWORDS:
+                if keyword in search_lower:
+                    args["dataset"] = ds
+                    break
+
+    return args
+
+
 def parse_tool_calls(server_log: str) -> list[dict]:
-    """Parse telemetry log into structured tool calls."""
+    """Parse telemetry log into structured tool calls.
+
+    Supports two formats:
+      - Full: [TELEMETRY] Tool: / Args: / Output lines
+      - Output-only: just [TELEMETRY] Output lines (tool inferred from content)
+
+    Handles multi-line output (Windows CRLF can split JSON across lines).
+    """
     if not server_log:
         return []
+
+    # First, extract all Output blocks (may span multiple lines until next marker)
+    # Use regex that captures everything until next [TELEMETRY], INFO:, or end of string
+    output_pattern = re.compile(
+        r'\[TELEMETRY\] Output \((\d+) bytes\): (.*?)(?=\[TELEMETRY\]|INFO:|$)',
+        re.DOTALL,
+    )
+    tool_pattern = re.compile(r'\[TELEMETRY\] Tool: (.+)')
+    args_pattern = re.compile(r'\[TELEMETRY\] Args: (.+)')
 
     calls = []
     current_tool = None
     current_args = None
 
-    for line in server_log.split("\n"):
-        line = line.strip()
+    # Check for Tool:/Args: lines (full format)
+    for m in tool_pattern.finditer(server_log):
+        current_tool = m.group(1).strip()
+    for m in args_pattern.finditer(server_log):
+        try:
+            current_args = eval(m.group(1).strip())
+        except Exception:
+            current_args = m.group(1).strip()
 
-        # Tool name
-        m = re.match(r"\[TELEMETRY\] Tool: (.+)", line)
-        if m:
-            current_tool = m.group(1)
-            current_args = None
-            continue
+    # If full format (has Tool: lines), parse line by line
+    if current_tool:
+        current_tool = None
+        current_args = None
+        for line in server_log.split("\n"):
+            line = line.strip()
+            m = re.match(r"\[TELEMETRY\] Tool: (.+)", line)
+            if m:
+                current_tool = m.group(1).strip()
+                current_args = None
+                continue
+            m = re.match(r"\[TELEMETRY\] Args: (.+)", line)
+            if m:
+                try:
+                    current_args = eval(m.group(1))
+                except Exception:
+                    current_args = m.group(1)
+                continue
+            m = re.match(r"\[TELEMETRY\] Tool executed successfully", line)
+            if m:
+                continue
+            m = re.match(r"\[TELEMETRY\] Output \((\d+) bytes\): (.+)", line)
+            if m and current_tool:
+                output_raw = m.group(2).strip()
+                is_error = '"error"' in output_raw[:300] and "timed out" in output_raw[:300]
+                has_data = '"data"' in output_raw[:300] and '"error"' not in output_raw[:300]
+                calls.append({
+                    "tool": current_tool,
+                    "args": current_args or {},
+                    "output_size": int(m.group(1)),
+                    "output": output_raw,
+                    "has_data": has_data,
+                    "is_error": is_error,
+                })
+                current_tool = None
+                current_args = None
+        return calls
 
-        # Tool args
-        m = re.match(r"\[TELEMETRY\] Args: (.+)", line)
-        if m:
-            try:
-                current_args = eval(m.group(1))  # safe: our own telemetry output
-            except Exception:
-                current_args = m.group(1)
-            continue
+    # Output-only format: infer tool from content
+    for m in output_pattern.finditer(server_log):
+        output_size = int(m.group(1))
+        output_raw = m.group(2).strip().replace("\r\n", "\n").replace("\r", "")
+        # Clean trailing whitespace/newlines
+        output_raw = output_raw.rstrip()
 
-        # Tool executed = end of this call
-        m = re.match(r"\[TELEMETRY\] Tool executed successfully: (.+)", line)
-        if m and current_tool:
-            # Check for output on next lines - look ahead
-            continue
+        tool = _infer_tool_from_output(output_raw)
+        args = _extract_args_from_output(tool, output_raw)
 
-        # Output line
-        m = re.match(r"\[TELEMETRY\] Output \((\d+) bytes\): (.+)", line)
-        if m and current_tool:
-            output_size = int(m.group(1))
-            output_raw = m.group(2)
+        is_error = '"error"' in output_raw[:300] and "timed out" in output_raw[:300]
+        has_data = '"data"' in output_raw[:300] and '"error"' not in output_raw[:300]
 
-            # Check if it was an error
-            is_error = '"error"' in output_raw[:300] and "timed out" in output_raw[:300]
-            has_data = '"data"' in output_raw[:300] and '"error"' not in output_raw[:300]
-
-            call = {
-                "tool": current_tool,
-                "args": current_args or {},
-                "output_size": output_size,
-                "output": output_raw,
-                "has_data": has_data,
-                "is_error": is_error,
-            }
-            calls.append(call)
-            current_tool = None
-            current_args = None
+        calls.append({
+            "tool": tool,
+            "args": args,
+            "output_size": output_size,
+            "output": output_raw,
+            "has_data": has_data,
+            "is_error": is_error,
+        })
 
     return calls
 
@@ -114,8 +353,18 @@ def summarize_tool_trace(calls: list[dict]) -> str:
 
 
 def detect_dataset_used(calls: list[dict]) -> str:
-    """Detect which dataset was actually used from tool calls."""
-    for call in calls:
+    """Detect which dataset was actually used from tool calls.
+
+    Prefers later steps (step 3/4) over earlier (step 2) and explicit JSON
+    matches over keyword-inferred ones, since step 3 outputs often contain
+    the actual dataset name while step 2 may match wrong keywords.
+    """
+    # Priority order: step 3 > step 4 > step 2 > step 1
+    priority = {"3_get_metadata": 0, "4_get_data": 1, "2_get_indicators": 2,
+                "1_know_about_mospi_api": 3, "unknown": 4}
+    sorted_calls = sorted(calls, key=lambda c: priority.get(c["tool"], 4))
+
+    for call in sorted_calls:
         args = call.get("args", {})
         if "dataset" in args:
             return args["dataset"]
@@ -147,7 +396,28 @@ def parse_json_file(json_path: Path) -> list[dict]:
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    dataset = data.get("dataset", "")
+    dataset_tag = data.get("dataset", "")
+
+    # For REGRESSION runs, load the expected dataset per query from the queries CSV
+    query_datasets = {}
+    if dataset_tag == "REGRESSION":
+        csv_path_raw = data.get("csv", "").replace("\\", "/")
+        if csv_path_raw:
+            # Try relative to json_path's parent's parent (responses/ -> regression_testing/)
+            candidates = [
+                json_path.parent / csv_path_raw,
+                json_path.parent.parent / csv_path_raw,
+                Path(csv_path_raw),
+            ]
+            for cp in candidates:
+                if cp.exists():
+                    with open(cp, newline="", encoding="utf-8") as f:
+                        for row in csv.DictReader(f):
+                            qno = row.get("no", "").strip()
+                            ds = row.get("datasets", "").strip()
+                            if qno and ds:
+                                query_datasets[int(qno)] = ds.split("|")[0]  # use first dataset for cross-dataset
+                    break
 
     # Extract platform and mode from filename (e.g., chatgpt_PLFS_single_20260201_123456.json)
     fname = json_path.stem
@@ -196,17 +466,31 @@ def parse_json_file(json_path: Path) -> list[dict]:
         # All calls summary for judge (JSON of all calls with args + truncated output)
         all_calls_json = json.dumps(tool_all_calls, ensure_ascii=False, default=str)
 
+        # Resolve per-query dataset (REGRESSION mode uses queries CSV, else tag)
+        qno = result.get("no", "")
+        dataset = query_datasets.get(int(qno), dataset_tag) if qno and query_datasets else dataset_tag
+
+        # Detect routed dataset: telemetry first, then response text fallback
+        routed = detect_dataset_used(calls)
+        if not routed and calls:
+            # Fallback: scan response text for dataset keywords
+            resp_lower = f" {response.lower()} "
+            for keyword, ds in _DATASET_KEYWORDS:
+                if keyword in resp_lower:
+                    routed = ds
+                    break
+
         row = {
             "platform": platform,
             "mode": mode,
             "dataset": dataset,
-            "no": result.get("no", ""),
+            "no": qno,
             "query": result.get("query", ""),
             "indicator_tested": result.get("indicator_tested", ""),
             "filters_tested": result.get("filters_tested", ""),
             "status": result.get("status", ""),
-            "dataset_routed_to": detect_dataset_used(calls),
-            "correct_routing": "YES" if detect_dataset_used(calls) == dataset else ("WRONG" if detect_dataset_used(calls) else "N/A"),
+            "dataset_routed_to": routed,
+            "correct_routing": "YES" if routed == dataset else ("WRONG" if routed else "N/A"),
             "num_tool_calls": len(calls),
             "tool_trace": summarize_tool_trace(calls),
             "reached_get_data": "YES" if any(c["tool"] == "4_get_data" for c in calls) else "NO",
