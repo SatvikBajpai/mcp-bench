@@ -549,29 +549,50 @@ def main():
         if only_queries and (ds.upper(), int(qno)) not in only_queries:
             continue
 
-        score_routing  = auto_score_routing(row)
-        score_ordering = auto_score_ordering(row)
+        # If no telemetry was captured, skip all dimensions (can't grade)
+        has_telemetry = bool(row.get("tool_trace", "").strip())
 
-        score_filter,   filter_notes   = score_filter_accuracy(row)
-        score_data,     data_notes     = score_data_retrieval(row)
-        score_response, response_notes = score_response_quality(row)
+        if not has_telemetry:
+            score_routing   = -1
+            score_ordering  = -1
+            score_filter    = -1
+            filter_notes    = "No server telemetry captured."
+            score_data      = -1
+            data_notes      = "No server telemetry captured."
+            score_response  = -1
+            response_notes  = "No server telemetry captured."
+            gt_value = ground_truth.get(int(qno), "") if qno else ""
+            score_gt, gt_notes = score_ground_truth(row, gt_value)
+            score_api_val   = -1
+            api_val_notes   = "No server telemetry captured."
+        else:
+            score_routing  = auto_score_routing(row)
+            score_ordering = auto_score_ordering(row)
 
-        gt_value = ground_truth.get(int(qno), "") if qno else ""
-        score_gt, gt_notes = score_ground_truth(row, gt_value)
+            score_filter,   filter_notes   = score_filter_accuracy(row)
+            score_data,     data_notes     = score_data_retrieval(row)
+            score_response, response_notes = score_response_quality(row)
 
-        score_api_val, api_val_notes = score_api_validation(row)
+            gt_value = ground_truth.get(int(qno), "") if qno else ""
+            score_gt, gt_notes = score_ground_truth(row, gt_value)
+
+            score_api_val, api_val_notes = score_api_validation(row)
 
         raw_scores = [score_routing, score_ordering, score_filter,
                       score_data, score_response, score_gt, score_api_val]
         total = sum(s for s in raw_scores if isinstance(s, int) and s > 0)
 
+        display_routing = "N/A" if score_routing == -1 else score_routing
+        display_ordering = "N/A" if score_ordering == -1 else score_ordering
         display_filter  = "N/A" if score_filter  == -1 else score_filter
+        display_data    = "N/A" if score_data    == -1 else score_data
+        display_resp    = "N/A" if score_response == -1 else score_response
         display_gt      = "N/A" if score_gt      == -1 else score_gt
         display_api_val = "N/A" if score_api_val == -1 else score_api_val
 
         print(f"[{row_num}/{len(rows)}] {ds} Q{qno}: {qstr}...")
-        print(f"    Routing={score_routing} Order={score_ordering} Filter={display_filter} "
-              f"Data={score_data} Response={score_response} GT={display_gt} "
+        print(f"    Routing={display_routing} Order={display_ordering} Filter={display_filter} "
+              f"Data={display_data} Response={display_resp} GT={display_gt} "
               f"APIVal={display_api_val} Total={total}/7")
         if filter_notes:
             print(f"    [Filter]   {filter_notes}")
@@ -587,13 +608,13 @@ def main():
 
         out_row = dict(row)
         out_row.update({
-            "score_routing":          score_routing,
-            "score_ordering":         score_ordering,
+            "score_routing":          display_routing,
+            "score_ordering":         display_ordering,
             "score_filter_accuracy":  display_filter,
             "filter_notes":           filter_notes,
-            "score_data_retrieval":   score_data,
+            "score_data_retrieval":   display_data,
             "data_notes":             data_notes,
-            "score_response_quality": score_response,
+            "score_response_quality": display_resp,
             "response_notes":         response_notes,
             "score_ground_truth":     display_gt,
             "ground_truth_notes":     gt_notes,
